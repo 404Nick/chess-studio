@@ -9,6 +9,7 @@ import type {
   MoveNode,
   PositionAnalysis,
 } from '@/types';
+import type { Lang } from '@/lib/i18n/translations';
 import type { StockfishEngine } from '@/lib/engine/StockfishEngine';
 import { accuracyFromWinDrop, scoreFor, scoreToCp, winPercentFor } from '@/lib/engine/uci';
 import { CLASS_ORDER, classifyMove, nagFor } from './classify';
@@ -20,6 +21,8 @@ export interface ReviewOptions {
   /** Half-moves that are still inside the opening book and should be labelled "book". */
   readonly bookPlies: number;
   readonly openingName: string | null;
+  /** Language for the generated move explanations. */
+  readonly lang?: Lang;
   readonly onProgress?: (done: number, total: number) => void;
   readonly shouldCancel?: () => boolean;
 }
@@ -115,19 +118,22 @@ export async function reviewGame(
 
     const verdict = classifyMove({ node, before, after, legalMoves, isBook });
 
-    const explanation = explainMove({
-      node,
-      before,
-      after,
-      classification: verdict.classification,
-      cpLoss: verdict.cpLoss,
-      winDrop: verdict.winDrop,
-      scoreBefore: verdict.scoreBefore,
-      scoreAfter: verdict.scoreAfter,
-      sacrificedValue: verdict.sacrificedValue,
-      openingName: options.openingName,
-      legalMoves,
-    });
+    const explanation = explainMove(
+      {
+        node,
+        before,
+        after,
+        classification: verdict.classification,
+        cpLoss: verdict.cpLoss,
+        winDrop: verdict.winDrop,
+        scoreBefore: verdict.scoreBefore,
+        scoreAfter: verdict.scoreAfter,
+        sacrificedValue: verdict.sacrificedValue,
+        openingName: options.openingName,
+        legalMoves,
+      },
+      options.lang,
+    );
 
     const assessment: MoveAssessment = {
       classification: verdict.classification,
@@ -189,6 +195,7 @@ export interface QuickAssessInput {
   readonly after: PositionAnalysis;
   readonly bookPlies: number;
   readonly openingName: string | null;
+  readonly lang?: Lang;
 }
 
 export function assessSingleMove(input: QuickAssessInput): MoveAssessment {
@@ -203,19 +210,22 @@ export function assessSingleMove(input: QuickAssessInput): MoveAssessment {
     isBook,
   });
 
-  const explanation = explainMove({
-    node: input.node,
-    before: input.before,
-    after: input.after,
-    classification: verdict.classification,
-    cpLoss: verdict.cpLoss,
-    winDrop: verdict.winDrop,
-    scoreBefore: verdict.scoreBefore,
-    scoreAfter: verdict.scoreAfter,
-    sacrificedValue: verdict.sacrificedValue,
-    openingName: input.openingName,
-    legalMoves,
-  });
+  const explanation = explainMove(
+    {
+      node: input.node,
+      before: input.before,
+      after: input.after,
+      classification: verdict.classification,
+      cpLoss: verdict.cpLoss,
+      winDrop: verdict.winDrop,
+      scoreBefore: verdict.scoreBefore,
+      scoreAfter: verdict.scoreAfter,
+      sacrificedValue: verdict.sacrificedValue,
+      openingName: input.openingName,
+      legalMoves,
+    },
+    input.lang,
+  );
 
   return {
     classification: verdict.classification,

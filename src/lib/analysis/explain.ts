@@ -1,7 +1,7 @@
 import { Chess } from 'chess.js';
 import type { Color, MoveClass, MoveNode, PieceSymbol, PositionAnalysis, Score, Square } from '@/types';
+import type { Lang } from '@/lib/i18n/translations';
 import {
-  PIECE_NAME,
   PIECE_VALUE,
   boardFromFen,
   materialBalance,
@@ -17,30 +17,15 @@ import {
   findForks,
   findHanging,
   findPins,
-  listPhrase,
 } from '@/lib/chess/tactics';
 import { formatScore, scoreFor, scoreToCp, winPercentFor } from '@/lib/engine/uci';
 import { parseUci } from '@/lib/chess/line';
+import { type Phrasebook, type Severity, getPhrasebook } from './phrasebook';
 
 const CENTRAL_SQUARES = new Set<string>(['d4', 'd5', 'e4', 'e5', 'c4', 'c5', 'f4', 'f5']);
 
-export function sideName(color: Color): string {
-  return color === 'w' ? 'White' : 'Black';
-}
-
-function pawns(cp: number): string {
-  const value = Math.abs(cp) / 100;
-  if (value >= 10) return `${value.toFixed(0)} pawns`;
-  if (Math.abs(value - 1) < 0.001) return '1 pawn';
-  return `${value.toFixed(1)} pawns`;
-}
-
-function article(type: PieceSymbol): string {
-  return `the ${PIECE_NAME[type]}`;
-}
-
 /* ------------------------------------------------------------------ */
-/* Structured facts about a candidate move                             */
+/* Structured facts about a candidate move (language-neutral)          */
 /* ------------------------------------------------------------------ */
 
 export interface MoveFacts {
@@ -55,13 +40,9 @@ export interface MoveFacts {
   readonly isMate: boolean;
   readonly castles: boolean;
   readonly promotes: PieceSymbol | null;
-  /** Forks created by the piece that just moved. */
   readonly forks: readonly Fork[];
-  /** Pins created by the piece that just moved. */
   readonly pins: readonly Pin[];
-  /** Enemy pieces left loose after the move. */
   readonly enemyLoose: readonly HangingPiece[];
-  /** Own pieces left loose after the move. */
   readonly ownLoose: readonly HangingPiece[];
   readonly develops: boolean;
   readonly central: boolean;
@@ -126,48 +107,35 @@ export function collectMoveFacts(fen: string, uci: string): MoveFacts | null {
   };
 }
 
-function forkPhrase(fork: Fork): string {
-  const names = fork.targets.map((t) => (t.type === 'k' ? 'the king' : `${article(t.type)} on ${t.square}`));
-  return `forking ${listPhrase(names)}`;
-}
-
-function pinPhrase(pin: Pin): string {
-  return pin.absolute
-    ? `pinning ${article(pin.pinnedType)} on ${pin.pinned} against the king`
-    : `pinning ${article(pin.pinnedType)} on ${pin.pinned} to ${article(pin.behindType)} on ${pin.behind}`;
-}
-
-/** A short verb phrase describing what a move accomplishes. */
-export function intentPhrase(facts: MoveFacts): string {
+/** A short verb phrase describing what a move accomplishes, in `pb`'s language. */
+export function intentPhrase(facts: MoveFacts, pb: Phrasebook): string {
   const parts: string[] = [];
 
-  if (facts.isMate) return 'delivering checkmate';
-  if (facts.promotes) parts.push(`promoting to a ${PIECE_NAME[facts.promotes]}`);
+  if (facts.isMate) return pb.intent.mate();
+  if (facts.promotes) parts.push(pb.intent.promote(facts.promotes));
 
   if (facts.captured) {
-    if (facts.captureGain >= 100) parts.push(`winning ${article(facts.captured)} on ${facts.to}`);
-    else if (facts.captureGain > 0) parts.push(`picking up material on ${facts.to}`);
-    else parts.push(`trading on ${facts.to}`);
+    if (facts.captureGain >= 100) parts.push(pb.intent.win(facts.captured, facts.to));
+    else if (facts.captureGain > 0) parts.push(pb.intent.pickup(facts.to));
+    else parts.push(pb.intent.trade(facts.to));
   }
 
-  if (facts.forks.length > 0) parts.push(forkPhrase(facts.forks[0]));
-  else if (facts.pins.length > 0) parts.push(pinPhrase(facts.pins[0]));
+  if (facts.forks.length > 0) parts.push(pb.intent.fork(facts.forks[0]));
+  else if (facts.pins.length > 0) parts.push(pb.intent.pin(facts.pins[0]));
 
-  if (facts.castles) parts.push('castling the king into safety');
+  if (facts.castles) parts.push(pb.intent.castle());
 
   if (parts.length === 0) {
     const bigLoose = facts.enemyLoose.find((entry) => entry.loss >= 300);
-    if (bigLoose) parts.push(`hitting the loose ${PIECE_NAME[bigLoose.type]} on ${bigLoose.square}`);
-    else if (facts.givesCheck) parts.push('checking the king');
-    else if (facts.develops) parts.push(`developing ${article(facts.piece)} to ${facts.to}`);
-    else if (facts.central) parts.push(`taking the centre with ${facts.to}`);
-    else if (facts.kingAttackersOnEnemy >= 3) parts.push('piling more pieces onto the enemy king');
-    else parts.push(`improving ${article(facts.piece)}`);
+    if (bigLoose) parts.push(pb.intent.hitLoose(bigLoose.type, bigLoose.square));
+    else if (facts.givesCheck) parts.push(pb.intent.check());
+    else if (facts.develops) parts.push(pb.intent.develop(facts.piece, facts.to));
+    else if (facts.central) parts.push(pb.intent.center(facts.to));
+    else if (facts.kingAttackersOnEnemy >= 3) parts.push(pb.intent.kingPile());
+    else parts.push(pb.intent.improve(facts.piece));
   }
 
-  if (facts.givesCheck && !parts.some((p) => p.includes('check'))) parts.unshift('checking the king');
-
-  return listPhrase(parts.slice(0, 2));
+  return pb.and(parts.slice(0, 2));
 }
 
 /* ------------------------------------------------------------------ */
@@ -195,12 +163,13 @@ export interface Explanation {
 }
 
 /** Builds the paragraph shown under "Why this move?" plus supporting bullets. */
-export function explainMove(input: ExplainInput): Explanation {
+export function explainMove(input: ExplainInput, lang: Lang = 'en'): Explanation {
+  const pb = getPhrasebook(lang);
   const { node, before, after, classification, scoreBefore, scoreAfter, winDrop } = input;
   const mover = node.color;
   const enemy = opposite(mover);
-  const us = sideName(mover);
-  const them = sideName(enemy);
+  const us = pb.side(mover);
+  const them = pb.side(enemy);
 
   const playedFacts = collectMoveFacts(node.fenBefore, node.uci);
   const bestUci = before.lines[0]?.pv[0] ?? before.bestMove;
@@ -213,23 +182,21 @@ export function explainMove(input: ExplainInput): Explanation {
   const details: string[] = [];
   const sentences: string[] = [];
 
-  const evalPhrase = `The evaluation moves from ${formatScore(scoreBefore)} to ${formatScore(scoreAfter)}.`;
+  const evalPhrase = pb.evalMoves(formatScore(scoreBefore), formatScore(scoreAfter));
 
   /* -------------------- Opening / forced short-circuits -------------------- */
 
   if (classification === 'book') {
     sentences.push(
-      input.openingName
-        ? `${node.san} is main-line theory — this is the ${input.openingName}.`
-        : `${node.san} is a well-known book move.`,
+      input.openingName ? pb.book.theory(node.san, input.openingName) : pb.book.known(node.san),
     );
-    if (playedFacts) sentences.push(`It continues development by ${intentPhrase(playedFacts)}.`);
-    details.push('Still inside the opening book, so no engine judgement is applied.');
+    if (playedFacts) sentences.push(pb.book.continues(intentPhrase(playedFacts, pb)));
+    details.push(pb.detail.stillBook());
     return { text: sentences.join(' '), details, betterMove: null };
   }
 
   if (classification === 'forced') {
-    sentences.push(`${node.san} was the only legal move in the position.`);
+    sentences.push(pb.forcedOnly(node.san));
     sentences.push(evalPhrase);
     return { text: sentences.join(' '), details, betterMove: null };
   }
@@ -237,32 +204,28 @@ export function explainMove(input: ExplainInput): Explanation {
   /* -------------------- Positive classifications -------------------- */
 
   if (classification === 'brilliant' && playedFacts) {
-    const sacrificed = pawns(input.sacrificedValue);
-    sentences.push(
-      `${node.san} is brilliant: ${us} gives up ${sacrificed} of material and the position only gets better.`,
-    );
+    const sacrificed = pb.pawns(input.sacrificedValue);
+    sentences.push(pb.brilliant.lead(node.san, us, sacrificed));
     const pv = before.lines[0]?.san.slice(0, 4).join(' ');
-    if (pv) sentences.push(`The point is the follow-up ${pv}.`);
-    else sentences.push(`The compensation is ${intentPhrase(playedFacts)}.`);
-    details.push(`Material offered: ${sacrificed} (static exchange evaluation).`);
-    if (playedFacts.forks.length) details.push(`Creates a fork: ${forkPhrase(playedFacts.forks[0])}.`);
+    if (pv) sentences.push(pb.brilliant.point(pv));
+    else sentences.push(pb.brilliant.compensation(intentPhrase(playedFacts, pb)));
+    details.push(pb.brilliant.dMaterial(sacrificed));
+    if (playedFacts.forks.length) details.push(pb.brilliant.dFork(pb.intent.fork(playedFacts.forks[0])));
     if (playedFacts.kingAttackersOnEnemy >= 2) {
-      details.push(`${playedFacts.kingAttackersOnEnemy} pieces are now aimed at the ${them.toLowerCase()} king.`);
+      details.push(pb.brilliant.dKing(playedFacts.kingAttackersOnEnemy, pb.sideLower(enemy)));
     }
     details.push(evalPhrase);
     return { text: sentences.join(' '), details, betterMove: null };
   }
 
   if (classification === 'great' && playedFacts) {
-    sentences.push(`${node.san} is the only move that holds everything together.`);
+    sentences.push(pb.great.lead(node.san));
     const second = before.lines[1];
     if (second?.san[0]) {
       const secondDrop = winPercentFor(before.lines[0].score, mover) - winPercentFor(second.score, mover);
-      sentences.push(
-        `The runner-up ${second.san[0]} would have given away ${secondDrop.toFixed(0)}% of ${us}'s winning chances.`,
-      );
+      sentences.push(pb.great.runnerUp(second.san[0], secondDrop.toFixed(0), us));
     }
-    sentences.push(`It works by ${intentPhrase(playedFacts)}.`);
+    sentences.push(pb.great.works(intentPhrase(playedFacts, pb)));
     details.push(evalPhrase);
     return { text: sentences.join(' '), details, betterMove: null };
   }
@@ -271,34 +234,30 @@ export function explainMove(input: ExplainInput): Explanation {
     if (playedFacts) {
       const lead =
         classification === 'best'
-          ? `${node.san} is the engine's top choice.`
+          ? pb.positive.leadBest(node.san)
           : classification === 'excellent'
-            ? `${node.san} is essentially as good as the top move.`
-            : `${node.san} is a solid, playable move.`;
+            ? pb.positive.leadExcellent(node.san)
+            : pb.positive.leadGood(node.san);
       sentences.push(lead);
-      sentences.push(`It works by ${intentPhrase(playedFacts)}.`);
+      sentences.push(pb.positive.works(intentPhrase(playedFacts, pb)));
 
       if (betterMove && classification !== 'best') {
-        sentences.push(`${betterMove} was marginally sharper${bestFacts ? `, ${intentPhrase(bestFacts)}` : ''}.`);
+        sentences.push(pb.positive.sharper(betterMove, bestFacts ? intentPhrase(bestFacts, pb) : null));
       }
 
       const balance = materialBalance(boardFromFen(node.fenAfter), mover);
       if (Math.abs(balance) >= 100) {
         details.push(
-          balance > 0
-            ? `${us} is up ${pawns(balance)} of material.`
-            : `${us} is down ${pawns(balance)} of material.`,
+          balance > 0 ? pb.positive.dUp(us, pb.pawns(balance)) : pb.positive.dDown(us, pb.pawns(balance)),
         );
       }
       if (playedFacts.ownLoose.length > 0) {
         const worst = playedFacts.ownLoose[0];
-        details.push(
-          `Watch ${article(worst.type)} on ${worst.square} — it is currently worth ${pawns(worst.loss)} to ${them}.`,
-        );
+        details.push(pb.positive.dWatch(pb.pieceOn(worst.type, worst.square), pb.pawns(worst.loss), them));
       }
       details.push(evalPhrase);
     } else {
-      sentences.push(`${node.san} keeps the evaluation steady.`);
+      sentences.push(pb.positive.steady(node.san));
       details.push(evalPhrase);
     }
     return { text: sentences.join(' '), details, betterMove };
@@ -306,25 +265,21 @@ export function explainMove(input: ExplainInput): Explanation {
 
   /* -------------------- Errors -------------------- */
 
-  const severity =
-    classification === 'blunder' ? 'a blunder' : classification === 'mistake' ? 'a mistake' : 'an inaccuracy';
+  const severity: Severity =
+    classification === 'blunder' ? 'blunder' : classification === 'mistake' ? 'mistake' : 'inaccuracy';
 
-  const reasons: string[] = [];
+  let reason: string | null = null;
 
   // 1. Allows forced mate.
   if (scoreAfter.kind === 'mate') {
     const mateForMover = scoreFor(scoreAfter, mover).value > 0;
     if (!mateForMover) {
-      reasons.push(
-        `it allows a forced mate${replyFacts ? ` beginning with ${replyFacts.san}` : ''} in ${Math.abs(
-          scoreAfter.value,
-        )} moves`,
-      );
+      reason = pb.reason.allowsMate(replyFacts?.san ?? null, Math.abs(scoreAfter.value));
     }
   }
 
   // 2. Hangs a piece that the opponent's best reply takes.
-  if (reasons.length === 0 && playedFacts) {
+  if (!reason && playedFacts) {
     const beforeLoose = new Map(
       findHanging(boardFromFen(node.fenBefore), mover).map((h) => [h.square, h.loss] as const),
     );
@@ -333,78 +288,64 @@ export function explainMove(input: ExplainInput): Explanation {
     );
     if (newlyLoose.length > 0) {
       const worst = newlyLoose[0];
-      const taker = replyFacts && replyFacts.to === worst.square ? ` — ${replyFacts.san} wins it on the spot` : '';
-      reasons.push(
-        `it leaves ${article(worst.type)} on ${worst.square} undefended, costing ${pawns(worst.loss)}${taker}`,
-      );
+      const taker = replyFacts && replyFacts.to === worst.square ? replyFacts.san : null;
+      reason = pb.reason.leavesUndefended(pb.pieceOn(worst.type, worst.square), pb.pawns(worst.loss), taker);
       details.push(
-        `Loose pieces after ${node.san}: ${listPhrase(
-          playedFacts.ownLoose.slice(0, 3).map((h) => `${PIECE_NAME[h.type]} on ${h.square}`),
-        )}.`,
+        pb.detail.loosePieces(
+          pb.and(playedFacts.ownLoose.slice(0, 3).map((h) => pb.pieceOn(h.type, h.square))),
+        ),
       );
     }
   }
 
   // 3. Walks into a tactic.
-  if (reasons.length === 0 && replyFacts) {
+  if (!reason && replyFacts) {
     if (replyFacts.forks.length > 0) {
-      reasons.push(`it walks into ${replyFacts.san}, ${forkPhrase(replyFacts.forks[0])}`);
+      reason = pb.reason.walksIntoFork(replyFacts.san, pb.intent.fork(replyFacts.forks[0]));
     } else if (replyFacts.pins.length > 0) {
-      reasons.push(`it allows ${replyFacts.san}, ${pinPhrase(replyFacts.pins[0])}`);
+      reason = pb.reason.allowsPin(replyFacts.san, pb.intent.pin(replyFacts.pins[0]));
     } else if (replyFacts.captureGain >= 150) {
-      reasons.push(`${them} simply plays ${replyFacts.san} and wins ${pawns(replyFacts.captureGain)}`);
+      reason = pb.reason.simplyWins(them, replyFacts.san, pb.pawns(replyFacts.captureGain));
     } else if (replyFacts.isMate) {
-      reasons.push(`${replyFacts.san} is mate`);
+      reason = pb.reason.isMate(replyFacts.san);
     }
   }
 
   // 4. Missed a concrete opportunity.
-  if (reasons.length === 0 && bestFacts) {
+  if (!reason && bestFacts) {
     if (bestFacts.captureGain >= 150 || bestFacts.forks.length > 0 || bestFacts.isMate) {
-      reasons.push(`it misses ${bestFacts.san}, ${intentPhrase(bestFacts)}`);
+      reason = pb.reason.misses(bestFacts.san, intentPhrase(bestFacts, pb));
     }
   }
 
   // 5. Generic fallback grounded in the numbers.
-  if (reasons.length === 0) {
-    reasons.push(
-      `it hands over ${winDrop.toFixed(0)}% of ${us}'s winning chances without a concrete tactical justification`,
-    );
+  if (!reason) {
+    reason = pb.reason.generic(winDrop.toFixed(0), us);
   }
 
-  sentences.push(`${node.san} is ${severity} because ${reasons[0]}.`);
+  sentences.push(pb.errorSentence(node.san, severity, reason));
 
   if (betterMove && bestFacts) {
-    sentences.push(`The engine prefers ${betterMove}, ${intentPhrase(bestFacts)}.`);
+    sentences.push(pb.prefers(betterMove, intentPhrase(bestFacts, pb)));
   }
   sentences.push(evalPhrase);
 
   /* -------------------- Supporting bullets -------------------- */
 
   const bestPv = before.lines[0]?.san.slice(0, 5).join(' ');
-  if (bestPv) details.push(`Best line: ${bestPv}`);
+  if (bestPv) details.push(pb.detail.bestLine(bestPv));
 
-  if (replyFacts) details.push(`${them}'s strongest reply is ${replyFacts.san}.`);
+  if (replyFacts) details.push(pb.detail.strongestReply(them, replyFacts.san));
 
   const cpSwing = Math.abs(scoreToCp(scoreFor(scoreBefore, mover)) - scoreToCp(scoreFor(scoreAfter, mover)));
-  if (cpSwing >= 50) details.push(`Centipawn loss: ${cpSwing} (${pawns(cpSwing)}).`);
+  if (cpSwing >= 50) details.push(pb.detail.cpLoss(cpSwing, pb.pawns(cpSwing)));
 
   const kingPressure = countKingAttackers(boardFromFen(node.fenAfter), mover);
   if (kingPressure >= 3) {
-    details.push(`${kingPressure} enemy pieces are now attacking the squares around the ${us.toLowerCase()} king.`);
+    details.push(pb.detail.kingPressure(kingPressure, pb.sideLower(mover)));
   }
 
   return { text: sentences.join(' '), details, betterMove };
-}
-
-/** One-line summary used in compact UI spots. */
-export function shortSummary(node: MoveNode): string {
-  if (!node.assessment) return '';
-  const { assessment } = node;
-  if (assessment.betterMove && assessment.cpLoss > 50) {
-    return `${node.san} loses ${(assessment.cpLoss / 100).toFixed(1)} pawns — ${assessment.betterMove} was better.`;
-  }
-  return assessment.explanation.split('. ')[0] ?? '';
 }
 
 export { PIECE_VALUE };

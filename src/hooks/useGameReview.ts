@@ -6,6 +6,7 @@ import { ReviewCancelledError, reviewGame } from '@/lib/analysis/review';
 import { createReviewEngine } from '@/lib/engine/engineManager';
 import { bookPlyCount, findOpening } from '@/lib/openings';
 import { useGame } from '@/store/gameStore';
+import { useSettings } from '@/store/settingsStore';
 
 export interface GameReviewHandle {
   readonly running: boolean;
@@ -23,6 +24,7 @@ export interface GameReviewHandle {
 export function useGameReview(): GameReviewHandle {
   const applyReview = useGame((state) => state.applyReview);
   const setReviewProgress = useGame((state) => state.setReviewProgress);
+  const lang = useSettings((state) => state.language);
 
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
@@ -67,6 +69,7 @@ export function useGameReview(): GameReviewHandle {
           multiPv: 2,
           bookPlies: bookPlyCount(sanMoves),
           openingName: match?.entry.name ?? null,
+          lang,
           onProgress: (completed, count) => {
             setDone(completed);
             setTotal(count);
@@ -86,7 +89,7 @@ export function useGameReview(): GameReviewHandle {
         setRunning(false);
       }
     },
-    [applyReview, setReviewProgress],
+    [applyReview, setReviewProgress, lang],
   );
 
   return { running, done, total, error, start, cancel };

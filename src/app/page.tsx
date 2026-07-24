@@ -124,6 +124,7 @@ export default function AnalysisPage() {
             after,
             bookPlies: bookPlyCount(history),
             openingName: match?.entry.name ?? null,
+            lang: useSettings.getState().language,
           }),
         );
       } catch {
