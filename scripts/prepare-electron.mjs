@@ -44,12 +44,14 @@ log(staticCopied ? 'copied .next/static' : 'no .next/static to copy (unexpected)
 const publicCopied = copyDir(path.join(root, 'public'), path.join(standalone, 'public'));
 log(publicCopied ? 'copied public/ (incl. stockfish engine)' : 'no public/ folder found');
 
-// Sanity check: the engine must be present or the desktop app ships without Stockfish.
-const engineEntry = path.join(standalone, 'public', 'stockfish', 'stockfish.js');
-if (!fs.existsSync(engineEntry)) {
-  log('WARNING: public/stockfish/stockfish.js missing — run `node scripts/setup-engine.mjs` before building.');
+// Sanity check: the engine manifest must be present or the desktop app ships without
+// Stockfish. The specific build filenames vary by engine version, so check the manifest.
+const manifestPath = path.join(standalone, 'public', 'stockfish', 'manifest.json');
+if (!fs.existsSync(manifestPath)) {
+  log('WARNING: public/stockfish/manifest.json missing — run `node scripts/setup-engine.mjs` before building.');
 } else {
-  log('verified bundled Stockfish engine');
+  const { single, threaded } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  log(`verified bundled Stockfish engine (single: ${single}, threaded: ${threaded ?? 'none'})`);
 }
 
 log('standalone output is ready for electron-builder');

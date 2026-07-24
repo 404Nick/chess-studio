@@ -12,7 +12,26 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // The Stockfish worker + wasm are served from /public/stockfish.
+        // Cross-origin isolation on every page enables SharedArrayBuffer, which the
+        // multi-threaded NNUE Stockfish build needs. `credentialless` (rather than
+        // `require-corp`) keeps cross-origin images like Chess.com avatars loading.
+        source: '/:path*',
+        headers: [
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          { key: 'Cross-Origin-Embedder-Policy', value: 'credentialless' },
+        ],
+      },
+      {
+        // The manifest is the mutable index — must revalidate so an engine upgrade
+        // is picked up instead of a stale cached pointer.
+        source: '/stockfish/manifest.json',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, must-revalidate' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+        ],
+      },
+      {
+        // The Stockfish worker + wasm + NNUE net are served from /public/stockfish.
         // Long-lived cache: the files are content-stable for a given engine build.
         source: '/stockfish/:path*',
         headers: [

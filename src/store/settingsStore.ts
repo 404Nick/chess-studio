@@ -42,9 +42,9 @@ const DEFAULTS: SettingsValues = {
   animationMs: 220,
   engineDepth: 16,
   multiPv: 3,
-  hashMb: 32,
+  hashMb: 128,
   liveAnalysis: true,
-  reviewDepth: 14,
+  reviewDepth: 16,
   explorerDb: 'lichess',
 };
 

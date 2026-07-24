@@ -5,10 +5,22 @@ import { type RawInfo, normaliseScore, parseBestMove, parseInfo, scoreToNumber }
 
 const ENGINE_DIR = '/stockfish';
 const MANIFEST_URL = `${ENGINE_DIR}/manifest.json`;
-const FALLBACK_ENTRIES = ['stockfish.js', 'stockfish-nnue-16-single.js', 'stockfish-16.1-lite-single.js'];
+const FALLBACK_ENTRIES = [
+  'stockfish-nnue-16-single.js',
+  'stockfish-nnue-16-no-simd.js',
+  'stockfish.js',
+];
 
-const HANDSHAKE_TIMEOUT_MS = 20_000;
+// The NNUE engine loads a ~40 MB net at startup, so allow a generous handshake window.
+const HANDSHAKE_TIMEOUT_MS = 45_000;
 const SEARCH_HARD_TIMEOUT_MS = 120_000;
+
+function isCrossOriginIsolated(): boolean {
+  return (
+    typeof globalThis !== 'undefined' &&
+    (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated === true
+  );
+}
 
 export class EngineUnavailableError extends Error {
   constructor(message: string) {
@@ -37,11 +49,20 @@ interface Job {
 type StatusListener = (status: EngineStatus, detail?: string) => void;
 
 async function resolveEntryUrl(): Promise<string> {
+  const isolated = isCrossOriginIsolated();
   try {
-    const response = await fetch(MANIFEST_URL, { cache: 'force-cache' });
+    // `no-store`: the manifest is the mutable index into the (immutable) engine files,
+    // so it must never be served from a stale HTTP cache after an engine upgrade.
+    const response = await fetch(MANIFEST_URL, { cache: 'no-store' });
     if (response.ok) {
-      const manifest = (await response.json()) as { entry?: string };
-      if (manifest.entry) return `${ENGINE_DIR}/${manifest.entry}`;
+      const manifest = (await response.json()) as {
+        entry?: string;
+        single?: string;
+        threaded?: string | null;
+      };
+      // Use the multi-threaded build only when SharedArrayBuffer is actually available.
+      const chosen = (isolated && manifest.threaded) || manifest.single || manifest.entry;
+      if (chosen) return `${ENGINE_DIR}/${chosen}`;
     }
   } catch {
     // Manifest is optional — fall through to probing well-known filenames.
@@ -208,11 +229,12 @@ export class StockfishEngine {
     this.setOption('UCI_AnalyseMode', 'true');
 
     // Only enable threads when the build supports them *and* the page is cross-origin
-    // isolated (SharedArrayBuffer). Otherwise a threaded build silently stalls.
-    const isolated = typeof globalThis !== 'undefined' && (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated === true;
-    if (this.supportsThreads && isolated) {
-      const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2;
-      this.setOption('Threads', String(Math.max(1, Math.min(4, cores - 1))));
+    // isolated (SharedArrayBuffer). Otherwise a threaded build silently stalls. Uses most
+    // of the machine's cores for a big speed-up on the multi-threaded NNUE build.
+    if (this.supportsThreads && isCrossOriginIsolated()) {
+      const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+      const threads = Math.max(1, Math.min(8, cores - 1));
+      this.setOption('Threads', String(threads));
     }
   }
 

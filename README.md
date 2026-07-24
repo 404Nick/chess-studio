@@ -279,11 +279,15 @@ remembered per browser.
 
 ## Engine notes
 
-* The app deliberately uses a **single-threaded** Stockfish build. Multi-threaded builds
-  need `SharedArrayBuffer`, which requires `Cross-Origin-Embedder-Policy: require-corp` —
-  and that header would break the outbound Lichess/Chess.com requests. If the page *is*
-  cross-origin isolated and the build supports threads, `StockfishEngine` enables them
-  automatically.
+* The app runs **Stockfish 16 with NNUE** (the `stockfish` package). The pages are served
+  **cross-origin isolated** (`COOP: same-origin` + `COEP: credentialless`), so
+  `SharedArrayBuffer` is available and the engine runs the **multi-threaded** build, using
+  most of the machine's cores — dramatically faster and stronger than a classical engine.
+  `credentialless` (rather than `require-corp`) keeps cross-origin images such as Chess.com
+  avatars loading. When isolation is unavailable, `StockfishEngine` transparently falls back
+  to the single-threaded NNUE build.
+* The ~40 MB NNUE net (`nn-*.nnue`) is loaded once at startup (cached afterwards / bundled
+  in the desktop app), which is what makes the evaluation accurate.
 * Searches are serialised through a job queue. Starting a new search sends `stop` to the
   engine, so the board never lags behind the cursor; stale results are discarded by token.
 * The transposition table is intentionally **not** cleared between positions in a review —
@@ -291,15 +295,15 @@ remembered per browser.
 
 ### Swapping in a different Stockfish build
 
-`scripts/setup-engine.mjs` already knows how to harvest both the `stockfish.js` and
-`stockfish` packages. To use a newer engine:
+`scripts/setup-engine.mjs` harvests the `stockfish` package, copies every build + the NNUE
+net into `public/stockfish/`, and writes a `manifest.json` naming the `single` and
+`threaded` entry points. To change engine version:
 
 ```bash
-npm install stockfish
+npm install stockfish@<version>
 ```
 
-Re-run `node scripts/setup-engine.mjs`. The script prefers single-threaded entry points and
-writes the chosen one into `public/stockfish/manifest.json`.
+Re-run `node scripts/setup-engine.mjs`.
 
 If `public/stockfish/` is missing or empty, the app does not crash: the header shows
 "Engine unavailable" with a **Retry** button, and every non-engine feature keeps working.

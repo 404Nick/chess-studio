@@ -19,27 +19,35 @@ import process from 'node:process';
 const ROOT = process.cwd();
 const DEST = path.join(ROOT, 'public', 'stockfish');
 
-/** Packages we know how to harvest, in order of preference. */
-const PACKAGES = ['stockfish.js', 'stockfish'];
+/** Packages we know how to harvest, in order of preference (modern NNUE first). */
+const PACKAGES = ['stockfish', 'stockfish.js'];
 
 /** Sub-directories inside a package that may contain the build output. */
 const SEARCH_DIRS = ['', 'src', 'dist', 'lib'];
 
 /**
- * Entry scripts we prefer, most-preferred first. Single-threaded builds come first:
- * they do not need SharedArrayBuffer, so the app works without COOP/COEP headers
- * (which would otherwise break the Lichess / Chess.com fetches).
+ * Multi-threaded NNUE entry, most-preferred first. Used when the page is cross-origin
+ * isolated (SharedArrayBuffer available) — dramatically faster.
  */
-const ENTRY_PREFERENCE = [
-  'stockfish.js',
-  'stockfish-nnue-16-single.js',
-  'stockfish-16.1-lite-single.js',
-  'stockfish-nnue-16-no-simd.js',
+const THREADED_PREFERENCE = [
   'stockfish-nnue-16.js',
-  'stockfish-16.1-lite.js',
-  'stockfish-17-lite-single.js',
-  'stockfish-17-single.js',
+  'stockfish-17.js',
+  'stockfish-16.1.js',
 ];
+
+/**
+ * Single-threaded entry, most-preferred first. Always works (no SharedArrayBuffer),
+ * so it is the safe fallback and the default when isolation is unavailable.
+ */
+const SINGLE_PREFERENCE = [
+  'stockfish-nnue-16-single.js',
+  'stockfish-nnue-16-no-simd.js',
+  'stockfish-17-single.js',
+  'stockfish-16.1-lite-single.js',
+  'stockfish.js',
+];
+
+const ENTRY_PREFERENCE = [...SINGLE_PREFERENCE, ...THREADED_PREFERENCE];
 
 /** Files that are loaded *by* an entry script and must never be treated as one. */
 const NON_ENTRY = /(\.wasm\.js|\.asm\.js|\.worker\.js|worker\.js)$/i;
@@ -85,14 +93,22 @@ function collectFiles(pkgDir) {
   return found;
 }
 
-function pickEntry(names) {
-  for (const preferred of ENTRY_PREFERENCE) {
+function pickFrom(preferences, names) {
+  for (const preferred of preferences) {
     if (names.includes(preferred)) return preferred;
   }
-  const fallback = names
-    .filter((n) => n.endsWith('.js') && !NON_ENTRY.test(n))
-    .sort((a, b) => a.length - b.length)[0];
-  return fallback ?? null;
+  return null;
+}
+
+function pickEntry(names) {
+  const single = pickFrom(SINGLE_PREFERENCE, names);
+  if (single) return single;
+  const threaded = pickFrom(THREADED_PREFERENCE, names);
+  if (threaded) return threaded;
+  return (
+    names.filter((n) => n.endsWith('.js') && !NON_ENTRY.test(n)).sort((a, b) => a.length - b.length)[0] ??
+    null
+  );
 }
 
 function main() {
@@ -140,16 +156,23 @@ function main() {
     return;
   }
 
+  const single = pickFrom(SINGLE_PREFERENCE, names) ?? entry;
+  const threaded = pickFrom(THREADED_PREFERENCE, names);
+
   const manifest = {
     package: pkgName,
-    entry,
+    // `entry` is the safe default; the app upgrades to `threaded` when the page is
+    // cross-origin isolated (SharedArrayBuffer available).
+    entry: single,
+    single,
+    threaded: threaded ?? null,
     files: names.sort(),
     generatedAt: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(DEST, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
   log(`${pkgName}: copied ${copied} new file(s), ${names.length} total -> public/stockfish`);
-  log(`entry script: ${entry}`);
+  log(`single: ${single}  threaded: ${threaded ?? '(none)'}`);
 }
 
 try {
