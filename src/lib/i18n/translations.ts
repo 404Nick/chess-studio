@@ -275,7 +275,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'analysis.searching': 'Анализ',
     'analysis.idle': 'Ожидание',
 
-    'class.brilliant': 'Бриллиантовый',
+    'class.brilliant': 'Блестящий',
     'class.great': 'Замечательный',
     'class.best': 'Лучший',
     'class.excellent': 'Отличный',

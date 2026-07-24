@@ -135,20 +135,33 @@ export function GameReviewSummary({
       <EvalGraph series={review.evalSeries} cursor={cursor} onSelect={onSelect} />
 
       <div className="divide-y divide-white/[0.05] border-t border-white/[0.06]">
-        {DISPLAY_ORDER.filter((id) => review.counts.w[id] + review.counts.b[id] > 0).map((id) => (
-          <div key={id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-1.5">
-            <span className="flex items-center gap-2 text-xs">
-              <MoveQualityBadge classification={id} size={16} />
-              <span style={{ color: MOVE_CLASS_META[id].color }}>{t(`class.${id}`)}</span>
-            </span>
-            <span className="w-8 text-right font-mono text-xs tabular-nums text-[var(--text-secondary)]">
-              {review.counts.w[id]}
-            </span>
-            <span className="w-8 text-right font-mono text-xs tabular-nums text-[var(--text-secondary)]">
-              {review.counts.b[id]}
-            </span>
-          </div>
-        ))}
+        {DISPLAY_ORDER.map((id) => {
+          const color = MOVE_CLASS_META[id].color;
+          const white = review.counts.w[id];
+          const black = review.counts.b[id];
+          return (
+            <div key={id} className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center px-3 py-1.5">
+              <span
+                className="text-center font-mono text-sm font-bold tabular-nums"
+                style={{ color, opacity: white ? 1 : 0.4 }}
+              >
+                {white}
+              </span>
+              <span className="flex items-center justify-center gap-2 text-xs">
+                <MoveQualityBadge classification={id} size={18} />
+                <span className="font-medium" style={{ color }}>
+                  {t(`class.${id}`)}
+                </span>
+              </span>
+              <span
+                className="text-center font-mono text-sm font-bold tabular-nums"
+                style={{ color, opacity: black ? 1 : 0.4 }}
+              >
+                {black}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
