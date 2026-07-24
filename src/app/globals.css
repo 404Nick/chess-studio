@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Code', monospace;
+
+    --surface-0: #07090f;
+    --surface-1: #0b0e16;
+    --surface-2: #10141f;
+    --surface-3: #161c2c;
+    --border-soft: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.13);
+    --text-primary: #e8ecf5;
+    --text-secondary: #98a3ba;
+    --text-muted: #6b768d;
+    --accent: #6ea8fe;
+  }
+
+  * {
+    border-color: var(--border-soft);
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse 90% 55% at 50% -8%, rgba(110, 168, 254, 0.13), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 90% 10%, rgba(38, 198, 218, 0.07), transparent 60%),
+      var(--surface-0);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: rgba(110, 168, 254, 0.3);
+  }
+
+  /* Scrollbars ------------------------------------------------------ */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.13);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.24);
+    background-clip: content-box;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(110, 168, 254, 0.7);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+@layer components {
+  /* NB: an explicit rgba() rather than `bg-[var(--surface-1)]/80` — Tailwind cannot
+     apply an opacity modifier to a colour that comes from a CSS variable. */
+  .panel {
+    @apply rounded-2xl border border-white/[0.07] bg-[rgba(11,14,22,0.82)] shadow-panel backdrop-blur-xl;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3;
+  }
+
+  .panel-title {
+    @apply text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)];
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-lg border border-white/[0.09]
+           bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-[var(--text-primary)]
+           transition-all duration-150 hover:border-white/20 hover:bg-white/[0.08]
+           active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply border-transparent bg-gradient-to-b from-[#5f9bfa] to-[#3b6fd4] text-white
+           shadow-[0_6px_20px_-8px_rgba(59,111,212,0.9)] hover:from-[#74aaff] hover:to-[#4478dd];
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-white/[0.06];
+  }
+
+  .btn-icon {
+    @apply h-9 w-9 p-0;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-white/[0.09] bg-black/25 px-3 py-2 text-sm text-[var(--text-primary)]
+           placeholder:text-[var(--text-muted)] transition-colors
+           focus:border-[rgba(110,168,254,0.6)] focus:outline-none;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-white/[0.09] bg-white/[0.04]
+           px-2.5 py-0.5 text-[0.68rem] font-medium tracking-wide text-[var(--text-secondary)];
+  }
+
+  .stat-label {
+    @apply text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)];
+  }
+
+  .divider {
+    @apply h-px w-full bg-white/[0.06];
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-white/[0.05];
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.09) 40px,
+      rgba(255, 255, 255, 0.03) 80px
+    );
+    background-size: 500px 100%;
+    @apply animate-shimmer;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* react-chessboard tweaks ------------------------------------------- */
+[data-boardid] {
+  border-radius: 10px;
+  overflow: hidden;
+}

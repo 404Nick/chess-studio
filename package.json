@@ -1,0 +1,105 @@
+{
+  "name": "chess-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chess Analytics & Studio — Stockfish-powered analysis board, opening explorer, Lichess/Chess.com profile review and a full position/PGN studio.",
+  "author": "Chess Studio",
+  "main": "electron/main.js",
+  "scripts": {
+    "postinstall": "node scripts/setup-engine.mjs",
+    "predev": "node scripts/setup-engine.mjs",
+    "dev": "next dev",
+    "prebuild": "node scripts/setup-engine.mjs",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "electron:dev": "electron .",
+    "electron:prepare": "node scripts/setup-engine.mjs && next build && node scripts/prepare-electron.mjs",
+    "dist": "npm run electron:prepare && electron-builder --win nsis portable",
+    "dist:dir": "npm run electron:prepare && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "chess.js": "^1.0.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.11.17",
+    "next": "^14.2.18",
+    "react": "^18.3.1",
+    "react-chessboard": "^4.7.2",
+    "react-dom": "^18.3.1",
+    "stockfish.js": "^10.0.2",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.18",
+    "gifenc": "^1.0.3",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "build": {
+    "appId": "com.chessstudio.desktop",
+    "productName": "Chess Studio",
+    "copyright": "Chess Studio",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "build-assets"
+    },
+    "files": [
+      "electron/**/*",
+      "!**/node_modules/**/*",
+      "!.next/**/*",
+      "!src/**/*",
+      "!public/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "app-standalone"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "ChessStudio-${version}-${arch}.${ext}",
+      "icon": "build-assets/icon.ico"
+    },
+    "nsis": {
+      "installerIcon": "build-assets/icon.ico",
+      "uninstallerIcon": "build-assets/icon.ico",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Chess Studio",
+      "artifactName": "ChessStudio-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "ChessStudio-Portable-${version}.${ext}"
+    }
+  }
+}

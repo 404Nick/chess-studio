@@ -1,0 +1,32 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Electron packaging output (installer + portable exe)
+dist-electron/
+
+# README media capture log (the .gif/.png assets ARE committed)
+assets/capture.log
+
+# Stockfish binaries are copied out of node_modules by scripts/setup-engine.mjs
+public/stockfish/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+.env
+.env.local
+.env.*.local
+
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+
+# Local Claude Code harness state
+.claude/
