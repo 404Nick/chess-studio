@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import type { Color, PositionAnalysis } from '@/types';
 import { MOVE_CLASS_META } from '@/lib/analysis/classify';
 import { useGameReview } from '@/hooks/useGameReview';
+import { useClassLabel, useTranslation } from '@/lib/i18n';
 import { currentNode, useGame } from '@/store/gameStore';
 import { useSettings } from '@/store/settingsStore';
 import { EngineLines } from './EngineLines';
@@ -34,6 +35,8 @@ export function AnalysisPanel({
   const engineDepth = useSettings((state) => state.engineDepth);
 
   const gameReview = useGameReview();
+  const { t } = useTranslation();
+  const assessmentLabel = useClassLabel(node?.assessment?.classification ?? 'good');
 
   const startReview = useCallback(() => {
     void gameReview.start(line, reviewDepth);
@@ -45,17 +48,17 @@ export function AnalysisPanel({
   return (
     <div className="flex min-h-0 flex-col">
       <PanelHeader
-        title="Engine analysis"
-        subtitle={engineUnavailable ? 'Engine unavailable' : `Stockfish · depth ${engineDepth}`}
+        title={t('analysis.title')}
+        subtitle={engineUnavailable ? t('engine.unavailable') : t('analysis.subtitle', { depth: engineDepth })}
         actions={
           gameReview.running ? (
             <Button variant="ghost" onClick={gameReview.cancel}>
               <Spinner />
-              Cancel
+              {t('common.cancel')}
             </Button>
           ) : (
             <Button variant="primary" onClick={startReview} disabled={engineUnavailable || line.moves.length === 0}>
-              {review ? 'Re-run review' : 'Review game'}
+              {review ? t('analysis.rerun') : t('analysis.review')}
             </Button>
           )
         }
@@ -65,7 +68,7 @@ export function AnalysisPanel({
         {gameReview.running ? (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-              <span>Analysing every position…</span>
+              <span>{t('analysis.analysing')}</span>
               <span className="font-mono tabular-nums">
                 {gameReview.done}/{gameReview.total}
               </span>
@@ -95,11 +98,11 @@ export function AnalysisPanel({
                 <MoveQualityBadge classification={assessment.classification} size={22} />
                 <span className="font-mono text-sm font-semibold text-white">{node.san}</span>
                 <span className="text-sm font-semibold" style={{ color: meta.color }}>
-                  {meta.label}
+                  {assessmentLabel}
                 </span>
                 {assessment.betterMove ? (
                   <span className="ml-auto chip">
-                    Better: <span className="font-mono text-white">{assessment.betterMove}</span>
+                    {t('analysis.better')}: <span className="font-mono text-white">{assessment.betterMove}</span>
                   </span>
                 ) : null}
               </div>
@@ -125,7 +128,7 @@ export function AnalysisPanel({
         {/* ---- Engine candidate moves ---- */}
         <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
           <div className="border-b border-white/[0.06] px-3 py-1.5">
-            <span className="panel-title">Candidate moves</span>
+            <span className="panel-title">{t('analysis.candidates')}</span>
           </div>
           <EngineLines
             lines={analysis.lines}

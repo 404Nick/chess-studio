@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import type { ExplorerMove } from '@/types';
 import { bookContinuations } from '@/lib/openings';
 import { useOpening } from '@/hooks/useOpening';
+import { useTranslation } from '@/lib/i18n';
 import { useSettings } from '@/store/settingsStore';
 import { EmptyState, ErrorNote, PanelHeader, Select, Spinner } from './ui/Primitives';
 
@@ -71,6 +72,7 @@ export function OpeningBook({
 }) {
   const db = useSettings((state) => state.explorerDb);
   const setSetting = useSettings((state) => state.set);
+  const { t } = useTranslation();
   const { entry, stats, loading, error } = useOpening(sanMoves, fen, db);
 
   const localNext = useMemo(() => bookContinuations(sanMoves).slice(0, 8), [sanMoves]);
@@ -81,18 +83,18 @@ export function OpeningBook({
   return (
     <div className="flex min-h-0 flex-col">
       <PanelHeader
-        title="Opening explorer"
-        subtitle={displayName ? `${displayEco ? `${displayEco} · ` : ''}${displayName}` : 'Out of book'}
+        title={t('opening.title')}
+        subtitle={displayName ? `${displayEco ? `${displayEco} · ` : ''}${displayName}` : t('opening.outOfBook')}
         actions={
           <Select
             value={db}
             onChange={(value) => setSetting('explorerDb', value)}
             options={[
-              { value: 'lichess', label: 'Lichess players' },
-              { value: 'masters', label: 'Masters' },
+              { value: 'lichess', label: t('opening.dbLichess') },
+              { value: 'masters', label: t('opening.dbMasters') },
             ]}
             className="w-36"
-            aria-label="Opening database"
+            aria-label={t('opening.title')}
           />
         }
       />
@@ -121,20 +123,20 @@ export function OpeningBook({
         {stats && stats.total > 0 ? (
           <div className="space-y-1.5 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5">
             <div className="flex items-center justify-between">
-              <span className="stat-label">Results in this position</span>
+              <span className="stat-label">{t('opening.results')}</span>
               <span className="font-mono text-[0.68rem] text-[var(--text-muted)]">
-                {formatCount(stats.total)} games
+                {formatCount(stats.total)} {t('common.games')}
               </span>
             </div>
             <WinBar white={stats.white} draws={stats.draws} black={stats.black} />
           </div>
         ) : null}
 
-        {error ? <ErrorNote>{error} Showing the offline book instead.</ErrorNote> : null}
+        {error ? <ErrorNote>{t('opening.explorerError')}</ErrorNote> : null}
 
         <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
           <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-1.5">
-            <span className="panel-title">Continuations</span>
+            <span className="panel-title">{t('opening.continuations')}</span>
             {loading ? <Spinner /> : null}
           </div>
 
@@ -166,18 +168,14 @@ export function OpeningBook({
               ))}
             </div>
           ) : (
-            <EmptyState
-              title="No book moves here"
-              body="This position has left both the offline book and the explorer database."
-              icon="❧"
-            />
+            <EmptyState title={t('opening.noBook')} body={t('opening.noBookBody')} icon="❧" />
           )}
         </div>
 
         {stats && stats.topGames.length > 0 ? (
           <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
             <div className="border-b border-white/[0.06] px-3 py-1.5">
-              <span className="panel-title">Notable games</span>
+              <span className="panel-title">{t('opening.notableGames')}</span>
             </div>
             <div className="divide-y divide-white/[0.04]">
               {stats.topGames.map((game) => (

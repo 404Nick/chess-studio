@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import type { GameReview, MoveClass } from '@/types';
 import { CLASS_ORDER, MOVE_CLASS_META } from '@/lib/analysis/classify';
+import { useTranslation } from '@/lib/i18n';
 import { MoveQualityBadge } from './MoveQualityBadge';
 
 const DISPLAY_ORDER: readonly MoveClass[] = CLASS_ORDER.filter((id) => id !== 'forced');
@@ -50,6 +51,7 @@ function EvalGraph({
   cursor: number;
   onSelect(index: number): void;
 }) {
+  const { t } = useTranslation();
   const width = 100;
   const height = 34;
 
@@ -99,7 +101,7 @@ function EvalGraph({
         ) : null}
       </svg>
       <p className="mt-1 text-center text-[0.62rem] text-[var(--text-muted)]">
-        Evaluation over the game — click to jump to a position
+        {t('review.evalGraph')}
       </p>
     </div>
   );
@@ -114,19 +116,20 @@ export function GameReviewSummary({
   cursor: number;
   onSelect(index: number): void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-xl border border-white/[0.07] bg-black/20">
       <div className="flex items-center justify-around gap-4 px-3 py-4">
-        <AccuracyDial label="White" value={review.accuracy.white} tint="#e8ecf5" />
+        <AccuracyDial label={t('board.white')} value={review.accuracy.white} tint="#e8ecf5" />
         <div className="text-center">
-          <p className="stat-label">Average loss</p>
+          <p className="stat-label">{t('review.averageLoss')}</p>
           <p className="mt-1 font-mono text-xs text-[var(--text-secondary)]">
             {(review.averageCpLoss.w / 100).toFixed(2)} / {(review.averageCpLoss.b / 100).toFixed(2)}
           </p>
-          <p className="mt-2 stat-label">Depth</p>
+          <p className="mt-2 stat-label">{t('review.depth')}</p>
           <p className="font-mono text-xs text-[var(--text-secondary)]">{review.depth}</p>
         </div>
-        <AccuracyDial label="Black" value={review.accuracy.black} tint="#6ea8fe" />
+        <AccuracyDial label={t('board.black')} value={review.accuracy.black} tint="#6ea8fe" />
       </div>
 
       <EvalGraph series={review.evalSeries} cursor={cursor} onSelect={onSelect} />
@@ -136,7 +139,7 @@ export function GameReviewSummary({
           <div key={id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-1.5">
             <span className="flex items-center gap-2 text-xs">
               <MoveQualityBadge classification={id} size={16} />
-              <span style={{ color: MOVE_CLASS_META[id].color }}>{MOVE_CLASS_META[id].label}</span>
+              <span style={{ color: MOVE_CLASS_META[id].color }}>{t(`class.${id}`)}</span>
             </span>
             <span className="w-8 text-right font-mono text-xs tabular-nums text-[var(--text-secondary)]">
               {review.counts.w[id]}

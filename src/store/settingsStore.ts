@@ -3,10 +3,12 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { PieceStyleId } from '@/types';
+import type { Lang } from '@/lib/i18n/translations';
 import { DEFAULT_THEME_ID } from '@/lib/theme/boardThemes';
 
 /** The persisted, serialisable half of the settings store. */
 export interface SettingsValues {
+  language: Lang;
   boardThemeId: string;
   pieceStyle: PieceStyleId;
   showCoordinates: boolean;
@@ -29,6 +31,7 @@ export interface SettingsState extends SettingsValues {
 }
 
 const DEFAULTS: SettingsValues = {
+  language: 'en',
   boardThemeId: DEFAULT_THEME_ID,
   pieceStyle: 'classic',
   showCoordinates: true,

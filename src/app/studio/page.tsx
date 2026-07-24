@@ -10,6 +10,7 @@ import { findOpening } from '@/lib/openings';
 import { SHAPE_COLORS, getTheme } from '@/lib/theme/boardThemes';
 import { useBoardShortcuts } from '@/hooks/useBoardShortcuts';
 import { useEngine, useLiveAnalysis } from '@/hooks/useStockfish';
+import { useTranslation } from '@/lib/i18n';
 import { activeChapter, studioCurrentShapes, useStudio } from '@/store/studioStore';
 import { useSettings } from '@/store/settingsStore';
 import { BoardControls } from '@/components/BoardControls';
@@ -23,6 +24,7 @@ import { Button, Panel, PanelHeader } from '@/components/ui/Primitives';
 
 export default function StudioPage() {
   const settings = useSettings();
+  const { t } = useTranslation();
   const theme = useMemo(() => getTheme(settings.boardThemeId), [settings.boardThemeId]);
 
   const study = useStudio((state) => state.study);
@@ -120,8 +122,14 @@ export default function StudioPage() {
     const count = importPgn(value);
     setImportText('');
     setImportOpen(false);
-    flash(count > 0 ? `Imported ${count} chapter${count === 1 ? '' : 's'}.` : 'No games found in that PGN.');
-  }, [importText, importPgn, flash]);
+    flash(
+      count > 1
+        ? t('studio.importedN', { n: count })
+        : count === 1
+          ? t('studio.imported1')
+          : t('studio.importedNone'),
+    );
+  }, [importText, importPgn, flash, t]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[16rem_minmax(0,1fr)_24rem]">
@@ -140,19 +148,19 @@ export default function StudioPage() {
         </Panel>
 
         <Panel className="space-y-2 p-3">
-          <p className="panel-title">Export & import</p>
+          <p className="panel-title">{t('studio.exportImport')}</p>
           <Button className="w-full" onClick={exportChapter}>
-            Export chapter PGN
+            {t('studio.exportChapter')}
           </Button>
           <Button className="w-full" onClick={exportStudy}>
-            Export whole study
+            {t('studio.exportStudy')}
           </Button>
           <Button
             className="w-full"
             variant={importOpen ? 'primary' : 'default'}
             onClick={() => setImportOpen((value) => !value)}
           >
-            Import PGN…
+            {t('studio.importPgn')}
           </Button>
 
           <AnimatePresence>
@@ -165,13 +173,13 @@ export default function StudioPage() {
               >
                 <textarea
                   className="input h-24 resize-none font-mono text-[0.68rem]"
-                  placeholder="Paste one or more PGN games…"
+                  placeholder={t('studio.pastePgn')}
                   value={importText}
                   onChange={(event) => setImportText(event.target.value)}
                   spellCheck={false}
                 />
                 <Button variant="primary" className="w-full" onClick={runImport} disabled={!importText.trim()}>
-                  Create chapters
+                  {t('studio.createChapters')}
                 </Button>
               </motion.div>
             ) : null}
@@ -196,10 +204,7 @@ export default function StudioPage() {
       <div className="flex flex-col gap-3">
         {editorOpen ? (
           <Panel className="p-3">
-            <PanelHeader
-              title="Position editor"
-              subtitle="Build a position, then start this chapter from it"
-            />
+            <PanelHeader title={t('editor.title')} subtitle={t('editor.subtitle')} />
             <div className="pt-3">
               <StudioEditor
                 fen={editorFen}
@@ -207,7 +212,7 @@ export default function StudioPage() {
                 onApply={(value) => {
                   setChapterStart(value);
                   closeEditor();
-                  flash('Chapter reset to the new starting position.');
+                  flash(t('studio.chapterReset'));
                 }}
                 onCancel={closeEditor}
                 theme={theme}
@@ -222,7 +227,9 @@ export default function StudioPage() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">{chapter.name}</p>
                 <p className="truncate text-[0.68rem] text-[var(--text-muted)]">
-                  {outcome.over ? outcome.reason : `${turn === 'w' ? 'White' : 'Black'} to move`}
+                  {outcome.over
+                    ? t(outcome.reasonKey)
+                    : t(turn === 'w' ? 'board.whiteToMove' : 'board.blackToMove')}
                   {opening ? ` · ${opening.entry.eco} ${opening.entry.name}` : ''}
                 </p>
               </div>
@@ -237,7 +244,7 @@ export default function StudioPage() {
                 canNext={line.cursor < line.moves.length - 1}
               >
                 <Button className="ml-1" onClick={() => openEditor(fen)}>
-                  Edit position
+                  {t('studio.editPosition')}
                 </Button>
               </BoardControls>
             </div>
@@ -272,14 +279,13 @@ export default function StudioPage() {
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <span className="stat-label mr-1">Draw</span>
+                <span className="stat-label mr-1">{t('board.draw')}</span>
                 {SHAPE_COLORS.map((color) => (
                   <button
                     key={color.id}
                     type="button"
                     onClick={() => setShapeColor(color.value)}
                     aria-label={`${color.label} arrows`}
-                    title={`${color.label} — right-drag draws an arrow, right-click highlights a square`}
                     className="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
                     style={{
                       background: color.value,
@@ -292,7 +298,7 @@ export default function StudioPage() {
                   onClick={() => setShapes(line.cursor, [])}
                   className="ml-1 text-[0.68rem] text-[var(--text-muted)] hover:text-white"
                 >
-                  Clear
+                  {t('common.clear')}
                 </button>
               </div>
 
@@ -302,7 +308,7 @@ export default function StudioPage() {
                   onClick={() => truncateFrom(line.cursor)}
                   className="text-[0.68rem] text-[var(--text-muted)] hover:text-white"
                 >
-                  Delete from here
+                  {t('board.deleteFromHere')}
                 </button>
               ) : null}
             </div>
@@ -310,10 +316,10 @@ export default function StudioPage() {
         )}
 
         <Panel className="p-3">
-          <p className="panel-title mb-2">Chapter notes</p>
+          <p className="panel-title mb-2">{t('studio.notes')}</p>
           <textarea
             className="input h-20 resize-none text-xs leading-relaxed"
-            placeholder="Introduce this chapter — the idea behind the line, what to look for…"
+            placeholder={t('studio.notesPlaceholder')}
             value={chapter.description}
             onChange={(event) => setChapterDescription(chapter.id, event.target.value)}
           />
@@ -323,13 +329,13 @@ export default function StudioPage() {
       {/* ============================== moves & engine ============================== */}
       <div className="flex flex-col gap-3">
         <Panel className="flex max-h-[28rem] min-h-[18rem] flex-col overflow-hidden">
-          <PanelHeader title="Moves" subtitle={`${line.moves.length} half-moves`} />
+          <PanelHeader title={t('moves.title')} subtitle={t('moves.count', { n: line.moves.length })} />
           <MoveList line={line} onSelect={navigate} showBadges={false} />
           {line.cursor >= 0 ? (
             <div className="border-t border-white/[0.06] p-2">
               <textarea
                 className="input h-16 resize-none text-xs"
-                placeholder={`Comment on ${node?.san ?? 'this move'}…`}
+                placeholder={t('studio.commentPlaceholder', { san: node?.san ?? '' })}
                 value={node?.comment ?? ''}
                 onChange={(event) => setComment(line.cursor, event.target.value)}
               />
@@ -339,8 +345,10 @@ export default function StudioPage() {
 
         <Panel className="overflow-hidden">
           <PanelHeader
-            title="Engine"
-            subtitle={engine.ready ? `Stockfish · depth ${settings.engineDepth}` : 'Engine unavailable'}
+            title={t('studio.engine')}
+            subtitle={
+              engine.ready ? t('analysis.subtitle', { depth: settings.engineDepth }) : t('engine.unavailable')
+            }
           />
           <EngineLines
             lines={analysis.lines}

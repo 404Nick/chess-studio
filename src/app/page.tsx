@@ -9,6 +9,7 @@ import { bookPlyCount, findOpening } from '@/lib/openings';
 import { getTheme, SHAPE_COLORS } from '@/lib/theme/boardThemes';
 import { useAnalyseOnce, useEngine, useLiveAnalysis } from '@/hooks/useStockfish';
 import { useBoardShortcuts } from '@/hooks/useBoardShortcuts';
+import { useTranslation } from '@/lib/i18n';
 import { currentNode, currentShapes, sanUpToCursor, useGame } from '@/store/gameStore';
 // `sanUpToCursor` is a plain helper (it allocates) and is derived with useMemo below.
 import { useSettings } from '@/store/settingsStore';
@@ -24,16 +25,21 @@ import { Panel, PanelHeader, Tabs, type TabItem } from '@/components/ui/Primitiv
 
 type PanelTab = 'analysis' | 'opening' | 'players' | 'board';
 
-const TABS: readonly TabItem<PanelTab>[] = [
-  { id: 'analysis', label: 'Analysis' },
-  { id: 'opening', label: 'Opening' },
-  { id: 'players', label: 'Players' },
-  { id: 'board', label: 'Board' },
+const TAB_KEYS: readonly { id: PanelTab; key: string }[] = [
+  { id: 'analysis', key: 'tab.analysis' },
+  { id: 'opening', key: 'tab.opening' },
+  { id: 'players', key: 'tab.players' },
+  { id: 'board', key: 'tab.board' },
 ];
 
 export default function AnalysisPage() {
   const settings = useSettings();
+  const { t } = useTranslation();
   const theme = useMemo(() => getTheme(settings.boardThemeId), [settings.boardThemeId]);
+  const tabItems = useMemo<TabItem<PanelTab>[]>(
+    () => TAB_KEYS.map((tab) => ({ id: tab.id, label: t(tab.key) })),
+    [t],
+  );
 
   const line = useGame((state) => state.line);
   const headers = useGame((state) => state.headers);
@@ -195,12 +201,14 @@ export default function AnalysisPage() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">
-                {headers.white ?? 'White'}
-                <span className="mx-2 text-[var(--text-muted)]">vs</span>
-                {headers.black ?? 'Black'}
+                {headers.white ?? t('board.white')}
+                <span className="mx-2 text-[var(--text-muted)]">{t('board.vs')}</span>
+                {headers.black ?? t('board.black')}
               </p>
               <p className="truncate text-[0.68rem] text-[var(--text-muted)]">
-                {outcome.over ? outcome.reason : `${turn === 'w' ? 'White' : 'Black'} to move`}
+                {outcome.over
+                  ? t(outcome.reasonKey)
+                  : t(turn === 'w' ? 'board.whiteToMove' : 'board.blackToMove')}
                 {headers.opening ? ` · ${headers.opening}` : ''}
               </p>
             </div>
@@ -243,14 +251,13 @@ export default function AnalysisPage() {
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <span className="stat-label mr-1">Draw</span>
+              <span className="stat-label mr-1">{t('board.draw')}</span>
               {SHAPE_COLORS.map((color) => (
                 <button
                   key={color.id}
                   type="button"
                   onClick={() => setShapeColor(color.value)}
                   aria-label={`${color.label} arrows`}
-                  title={`${color.label} — right-drag to draw an arrow, right-click to highlight`}
                   className="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
                   style={{
                     background: color.value,
@@ -263,7 +270,7 @@ export default function AnalysisPage() {
                 onClick={() => setShapes(line.cursor, [])}
                 className="ml-1 text-[0.68rem] text-[var(--text-muted)] hover:text-white"
               >
-                Clear
+                {t('common.clear')}
               </button>
             </div>
 
@@ -272,7 +279,7 @@ export default function AnalysisPage() {
               onClick={() => reset()}
               className="text-[0.68rem] text-[var(--text-muted)] hover:text-white"
             >
-              New game
+              {t('board.newGame')}
             </button>
           </div>
         </Panel>
@@ -295,7 +302,7 @@ export default function AnalysisPage() {
 
       {/* ============================== side panel ============================== */}
       <div className="flex min-h-0 flex-col gap-3">
-        <Tabs<PanelTab> items={TABS} value={tab} onChange={setTab} />
+        <Tabs<PanelTab> items={tabItems} value={tab} onChange={setTab} />
 
         <Panel className="flex max-h-[calc(100vh-16rem)] min-h-[26rem] flex-col overflow-hidden">
           {tab === 'analysis' ? (
@@ -316,8 +323,8 @@ export default function AnalysisPage() {
 
         <Panel className="flex max-h-[26rem] min-h-[14rem] flex-col overflow-hidden">
           <PanelHeader
-            title="Moves"
-            subtitle={`${line.moves.length} half-moves`}
+            title={t('moves.title')}
+            subtitle={t('moves.count', { n: line.moves.length })}
             actions={
               line.cursor >= 0 ? (
                 <button
@@ -325,7 +332,7 @@ export default function AnalysisPage() {
                   onClick={() => useGame.getState().truncateFrom(line.cursor)}
                   className="text-[0.68rem] text-[var(--text-muted)] hover:text-white"
                 >
-                  Delete from here
+                  {t('board.deleteFromHere')}
                 </button>
               ) : null
             }
@@ -335,7 +342,7 @@ export default function AnalysisPage() {
             <div className="border-t border-white/[0.06] p-2">
               <input
                 className="input text-xs"
-                placeholder="Add a comment to this move…"
+                placeholder={t('moves.commentPlaceholder')}
                 value={node?.comment ?? ''}
                 onChange={(event) => setComment(line.cursor, event.target.value)}
               />

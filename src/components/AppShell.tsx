@@ -6,21 +6,22 @@ import { usePathname } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 import type { EngineStatus } from '@/types';
 import { useEngine } from '@/hooks/useStockfish';
+import { LANGUAGES, useTranslation } from '@/lib/i18n';
 import { useSettings } from '@/store/settingsStore';
 import { useStudio } from '@/store/studioStore';
 
 const NAV = [
-  { href: '/', label: 'Analysis' },
-  { href: '/studio', label: 'Studio' },
+  { href: '/', key: 'nav.analysis' },
+  { href: '/studio', key: 'nav.studio' },
 ];
 
-const STATUS_TEXT: Record<EngineStatus, string> = {
-  idle: 'Engine idle',
-  loading: 'Loading engine…',
-  ready: 'Engine ready',
-  searching: 'Engine searching',
-  error: 'Engine error',
-  unavailable: 'Engine unavailable',
+const STATUS_KEY: Record<EngineStatus, string> = {
+  idle: 'engine.idle',
+  loading: 'engine.loading',
+  ready: 'engine.ready',
+  searching: 'engine.searching',
+  error: 'engine.error',
+  unavailable: 'engine.unavailable',
 };
 
 function statusTone(status: EngineStatus): string {
@@ -32,19 +33,18 @@ function statusTone(status: EngineStatus): string {
 function EngineBadge() {
   const hashMb = useSettings((state) => state.hashMb);
   const { status, error, retry } = useEngine(hashMb);
+  const { t } = useTranslation();
   const broken = status === 'error' || status === 'unavailable';
+  const label = t(STATUS_KEY[status]);
 
   return (
     <div className="flex items-center gap-2">
-      <span
-        className="chip"
-        title={error ?? STATUS_TEXT[status]}
-      >
+      <span className="chip" title={error ?? label}>
         <span
           className={clsx('h-1.5 w-1.5 rounded-full', status === 'searching' && 'animate-pulse')}
           style={{ background: statusTone(status) }}
         />
-        <span className="hidden sm:inline">{STATUS_TEXT[status]}</span>
+        <span className="hidden sm:inline">{label}</span>
       </span>
       {broken ? (
         <button
@@ -52,9 +52,34 @@ function EngineBadge() {
           onClick={retry}
           className="text-[0.68rem] text-[var(--text-muted)] underline-offset-2 hover:text-white hover:underline"
         >
-          Retry
+          {t('common.retry')}
         </button>
       ) : null}
+    </div>
+  );
+}
+
+function LanguageToggle() {
+  const language = useSettings((state) => state.language);
+  const setSetting = useSettings((state) => state.set);
+
+  return (
+    <div className="flex gap-0.5 rounded-lg bg-black/25 p-0.5" role="group" aria-label="Language">
+      {LANGUAGES.map((lang) => (
+        <button
+          key={lang.id}
+          type="button"
+          onClick={() => setSetting('language', lang.id)}
+          aria-pressed={language === lang.id}
+          title={lang.label}
+          className={clsx(
+            'rounded-md px-2 py-1 text-[0.68rem] font-bold tracking-wide transition-colors',
+            language === lang.id ? 'bg-white/[0.12] text-white' : 'text-[var(--text-muted)] hover:text-white',
+          )}
+        >
+          {lang.short}
+        </button>
+      ))}
     </div>
   );
 }
@@ -78,6 +103,7 @@ function useStoreHydration(): boolean {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hydrated = useStoreHydration();
+  const { t } = useTranslation();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -104,13 +130,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                     active ? 'bg-white/[0.10] text-white' : 'text-[var(--text-muted)] hover:text-white',
                   )}
                 >
-                  {item.label}
+                  {t(item.key)}
                 </Link>
               );
             })}
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
+            <LanguageToggle />
             <EngineBadge />
           </div>
         </div>

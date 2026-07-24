@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import type { Color, EngineLine } from '@/types';
 import { formatScore, scoreToNumber } from '@/lib/engine/uci';
+import { useTranslation } from '@/lib/i18n';
 import { EmptyState, Spinner } from './ui/Primitives';
 
 function scoreTone(line: EngineLine, mover: Color): string {
@@ -28,16 +29,17 @@ export function EngineLines({
   onPlayMove?(uci: string): void;
   className?: string;
 }) {
+  const { t } = useTranslation();
   if (lines.length === 0) {
     return (
       <div className={className}>
         {thinking ? (
           <div className="flex items-center gap-2 px-4 py-6 text-xs text-[var(--text-muted)]">
             <Spinner />
-            Starting the engine…
+            {t('analysis.starting')}
           </div>
         ) : (
-          <EmptyState title="No engine lines yet" body="Turn on live analysis to see candidate moves." icon="⚙" />
+          <EmptyState title={t('analysis.noLines')} body={t('analysis.noLinesBody')} icon="⚙" />
         )}
       </div>
     );
@@ -80,7 +82,7 @@ export function EngineLines({
       <div className="flex items-center justify-between px-3 py-1.5 text-[0.62rem] text-[var(--text-muted)]">
         <span className="flex items-center gap-1.5">
           {thinking ? <Spinner className="h-2.5 w-2.5" /> : <span className="h-2 w-2 rounded-full bg-[#7fce6b]" />}
-          {thinking ? 'Searching' : 'Idle'}
+          {thinking ? t('analysis.searching') : t('analysis.idle')}
         </span>
         <span className="font-mono tabular-nums">
           depth {lines[0]?.depth ?? 0}/{depth}

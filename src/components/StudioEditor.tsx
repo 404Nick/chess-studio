@@ -14,6 +14,7 @@ import {
   sanitiseCastling,
   validateFen,
 } from '@/lib/chess/fen';
+import { useTranslation } from '@/lib/i18n';
 import { BoardSurface } from './Chessboard';
 import { PieceGlyph, type PieceKey } from './board/pieces';
 import { Button, ErrorNote, PanelHeader, Select } from './ui/Primitives';
@@ -21,10 +22,10 @@ import { Button, ErrorNote, PanelHeader, Select } from './ui/Primitives';
 const PALETTE: PieceKey[] = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP'];
 
 const CASTLING_FLAGS: { flag: string; label: string }[] = [
-  { flag: 'K', label: 'White O-O' },
-  { flag: 'Q', label: 'White O-O-O' },
-  { flag: 'k', label: 'Black O-O' },
-  { flag: 'q', label: 'Black O-O-O' },
+  { flag: 'K', label: 'O-O' },
+  { flag: 'Q', label: 'O-O-O' },
+  { flag: 'k', label: 'O-O' },
+  { flag: 'q', label: 'O-O-O' },
 ];
 
 type Brush = PieceKey | 'erase' | null;
@@ -51,6 +52,7 @@ export function StudioEditor({
 }) {
   const [brush, setBrush] = useState<Brush>(null);
   const [fenDraft, setFenDraft] = useState(fen);
+  const { t } = useTranslation();
 
   const parts = useMemo(() => parseFen(fen), [fen]);
   const board = useMemo(() => boardFromFen(fen), [fen]);
@@ -158,16 +160,13 @@ export function StudioEditor({
           interactive
         />
 
-        <p className="text-[0.68rem] leading-relaxed text-[var(--text-muted)]">
-          Drag a piece from the palette onto the board, or pick a brush and click squares. Pieces already on
-          the board can be dragged between squares.
-        </p>
+        <p className="text-[0.68rem] leading-relaxed text-[var(--text-muted)]">{t('editor.hint')}</p>
       </div>
 
       {/* ------------------------------- controls ------------------------------- */}
       <div className="space-y-4">
         <div>
-          <p className="stat-label mb-2">Palette</p>
+          <p className="stat-label mb-2">{t('editor.palette')}</p>
           <div className="grid grid-cols-6 gap-1.5">
             {PALETTE.map((piece) => (
               <button
@@ -185,7 +184,7 @@ export function StudioEditor({
                     ? 'border-[rgba(110,168,254,0.8)] bg-[rgba(110,168,254,0.14)] shadow-glow'
                     : 'border-white/[0.08] bg-white/[0.03] hover:border-white/25',
                 )}
-                title={`${piece} — drag onto the board or click to arm the brush`}
+                title={piece}
               >
                 <PieceGlyph piece={piece} size={26} style={pieceStyle} />
               </button>
@@ -202,25 +201,25 @@ export function StudioEditor({
                 : 'border-white/[0.08] bg-white/[0.03] text-[var(--text-secondary)] hover:border-white/25',
             )}
           >
-            {brush === 'erase' ? 'Eraser active — click a square' : 'Eraser'}
+            {brush === 'erase' ? t('editor.eraserActive') : t('editor.eraser')}
           </button>
         </div>
 
         <div className="space-y-2">
           <Select
-            label="Side to move"
+            label={t('editor.sideToMove')}
             value={parts.turn}
             onChange={(value) => setPart({ turn: value as Color })}
             options={[
-              { value: 'w', label: 'White to move' },
-              { value: 'b', label: 'Black to move' },
+              { value: 'w', label: t('board.whiteToMove') },
+              { value: 'b', label: t('board.blackToMove') },
             ]}
           />
 
           <div>
-            <p className="stat-label mb-1.5">Castling rights</p>
+            <p className="stat-label mb-1.5">{t('editor.castling')}</p>
             <div className="grid grid-cols-2 gap-1.5">
-              {CASTLING_FLAGS.map((item) => (
+              {CASTLING_FLAGS.map((item, index) => (
                 <button
                   key={item.flag}
                   type="button"
@@ -232,18 +231,18 @@ export function StudioEditor({
                       : 'border-white/[0.08] bg-white/[0.03] text-[var(--text-muted)] hover:border-white/20',
                   )}
                 >
-                  {item.label}
+                  {t(index < 2 ? 'board.white' : 'board.black')} {item.label}
                 </button>
               ))}
             </div>
           </div>
 
           <Select
-            label="En passant target"
+            label={t('editor.enPassant')}
             value={parts.enPassant}
             onChange={(value) => setPart({ enPassant: value })}
             options={[
-              { value: '-', label: 'None' },
+              { value: '-', label: t('editor.none') },
               ...epChoices.map((square) => ({ value: square, label: square })),
             ]}
           />
@@ -256,7 +255,7 @@ export function StudioEditor({
               onChange(START_FEN);
             }}
           >
-            Start position
+            {t('editor.startPosition')}
           </Button>
           <Button
             onClick={() => {
@@ -264,12 +263,12 @@ export function StudioEditor({
               onChange(EMPTY_FEN);
             }}
           >
-            Clear board
+            {t('editor.clearBoard')}
           </Button>
         </div>
 
         <div>
-          <p className="stat-label mb-1.5">FEN</p>
+          <p className="stat-label mb-1.5">{t('editor.fen')}</p>
           <textarea
             className="input h-20 resize-none font-mono text-[0.68rem]"
             value={fenDraft}
@@ -278,7 +277,7 @@ export function StudioEditor({
             spellCheck={false}
           />
           <Button className="mt-1.5 w-full" onClick={applyFenDraft}>
-            Load this FEN
+            {t('editor.loadFen')}
           </Button>
         </div>
 
@@ -286,14 +285,13 @@ export function StudioEditor({
           <ErrorNote>{validation.error}</ErrorNote>
         ) : !validation.playable ? (
           <div className="rounded-lg border border-[rgba(242,193,78,0.35)] bg-[rgba(242,193,78,0.10)] px-3 py-2 text-xs leading-relaxed text-[#ffe0a0]">
-            The position is structurally valid but not legal to play from ({validation.error}). Fix it before
-            starting a chapter here.
+            {t('editor.notPlayable')}
           </div>
         ) : null}
 
         <div className="flex gap-1.5">
           <Button variant="ghost" className="flex-1" onClick={onCancel}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -301,7 +299,7 @@ export function StudioEditor({
             disabled={!validation.playable}
             onClick={() => onApply(fen)}
           >
-            Use position
+            {t('editor.usePosition')}
           </Button>
         </div>
       </div>

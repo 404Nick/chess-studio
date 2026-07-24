@@ -201,9 +201,12 @@ chess-studio/
 
 ### 2. Move classification & explanations
 
-Every move gets one of ten labels — **Brilliant, Great, Best, Excellent, Good, Book,
-Forced, Inaccuracy, Mistake, Blunder** — shown as an animated badge on the destination
-square and in the move list.
+Every move gets one of ten labels, each with its own **crisp vector icon** (a teal `!!`,
+a green ★, a thumbs-up, an open book, `?!`/`?`/`??`, …) in the style of the premium
+analyzers — shown as an animated badge on the destination square and in the move list:
+
+| ★ Best | ✦ Great | ✦✦ Brilliant | 👍 Excellent | ✓ Good | 📖 Book | ➔ Forced | ?! Inaccuracy | ? Mistake | ?? Blunder |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Classification is driven by the *drop in winning chances* (Lichess' win-probability model)
 rather than raw centipawns, so a 0.5-pawn slip in a wild position is judged differently
@@ -260,12 +263,17 @@ sent.
   shape annotations and optional `[%eval]` tags. **Import** a PGN containing several games
   to create one chapter per game.
 
-### 7. Appearance
+### 7. Appearance & language
 
 Six board themes (Walnut, Marble, Neon Dark, Emerald, Midnight, Coral) and four piece
 styles (Classic vector, Glyph, Neon, Outline), plus toggles for coordinates, legal-move
 hints, the eval bar, the best-move arrow and classification badges, and sliders for
 animation speed, search depth, MultiPV, review depth and hash size.
+
+The entire interface is **bilingual — English and Russian (Русский)** — switchable from the
+`EN / RU` toggle in the header (or the Board settings tab), including every panel, control,
+and the move-classification names (Бриллиантовый, Замечательный, Лучший, …). The choice is
+remembered per browser.
 
 ---
 

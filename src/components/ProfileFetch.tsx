@@ -6,24 +6,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Platform, PlayerProfile, RemoteGame } from '@/types';
 import { getGames, getProfile } from '@/lib/api/client';
 import { extractUsername, isValidUsername } from '@/lib/api/shared';
+import { type TFunction, useTranslation } from '@/lib/i18n';
 import { useGame } from '@/store/gameStore';
 import { Button, EmptyState, ErrorNote, PanelHeader, Spinner } from './ui/Primitives';
 
-const PLATFORMS: { id: Platform; label: string; accent: string }[] = [
-  { id: 'lichess', label: 'Lichess', accent: '#e8ecf5' },
-  { id: 'chesscom', label: 'Chess.com', accent: '#7fce6b' },
+const PLATFORMS: { id: Platform; labelKey: string; accent: string }[] = [
+  { id: 'lichess', labelKey: 'players.lichess', accent: '#e8ecf5' },
+  { id: 'chesscom', labelKey: 'players.chesscom', accent: '#7fce6b' },
 ];
 
-function relativeDate(timestamp: number): string {
+function relativeDate(timestamp: number, t: TFunction): string {
   if (!timestamp) return '';
   const diff = Date.now() - timestamp;
   const days = Math.floor(diff / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 30) return `${days}d ago`;
+  if (days <= 0) return t('time.today');
+  if (days === 1) return t('time.yesterday');
+  if (days < 30) return t('time.daysAgo', { n: days });
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
+  if (months < 12) return t('time.monthsAgo', { n: months });
+  return t('time.yearsAgo', { n: Math.floor(months / 12) });
 }
 
 function ResultTag({ result }: { result: string }) {
@@ -45,6 +46,7 @@ export function ProfileFetch() {
   const controllerRef = useRef<AbortController | null>(null);
   const loadPgn = useGame((state) => state.loadPgn);
   const setHeaders = useGame((state) => state.setHeaders);
+  const { t } = useTranslation();
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
@@ -59,7 +61,7 @@ export function ProfileFetch() {
     async (targetPlatform: Platform = platform) => {
       const { username } = extractUsername(query);
       if (!isValidUsername(username)) {
-        setError('Enter a username or paste a Lichess / Chess.com profile link.');
+        setError(t('players.badUsername'));
         return;
       }
 
@@ -80,22 +82,22 @@ export function ProfileFetch() {
         if (controller.signal.aborted) return;
         setProfile(fetchedProfile);
         setGames(fetchedGames);
-        if (fetchedGames.length === 0) setError('No recent standard games found for that account.');
+        if (fetchedGames.length === 0) setError(t('players.noGames'));
       } catch (err) {
         if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : 'Could not reach that service.');
+        setError(err instanceof Error ? err.message : t('players.noGames'));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     },
-    [platform, query],
+    [platform, query, t],
   );
 
   const openGame = useCallback(
     (game: RemoteGame) => {
       const ok = loadPgn(game.pgn, game);
       if (!ok) {
-        setError('That game could not be parsed into a playable line.');
+        setError(t('players.badGame'));
         return;
       }
       setHeaders({
@@ -110,12 +112,12 @@ export function ProfileFetch() {
       });
       setLoadedId(game.id);
     },
-    [loadPgn, setHeaders],
+    [loadPgn, setHeaders, t],
   );
 
   return (
     <div className="flex min-h-0 flex-col">
-      <PanelHeader title="Player profiles" subtitle="Load recent games straight from Lichess or Chess.com" />
+      <PanelHeader title={t('players.title')} subtitle={t('players.subtitle')} />
 
       <div className="space-y-3 border-b border-white/[0.06] p-3">
         <div className="flex gap-1 rounded-xl bg-black/25 p-1">
@@ -139,7 +141,7 @@ export function ProfileFetch() {
                   className="absolute inset-0 rounded-lg bg-white/[0.10]"
                 />
               ) : null}
-              <span className="relative">{item.label}</span>
+              <span className="relative">{t(item.labelKey)}</span>
             </button>
           ))}
         </div>
@@ -153,14 +155,14 @@ export function ProfileFetch() {
         >
           <input
             className="input"
-            placeholder="Username or profile link"
+            placeholder={t('players.placeholder')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             spellCheck={false}
             autoComplete="off"
           />
           <Button type="submit" variant="primary" disabled={loading}>
-            {loading ? <Spinner /> : 'Fetch'}
+            {loading ? <Spinner /> : t('players.fetch')}
           </Button>
         </form>
 
@@ -215,11 +217,7 @@ export function ProfileFetch() {
         </AnimatePresence>
 
         {games.length === 0 && !loading && !profile ? (
-          <EmptyState
-            title="Analyse anyone's games"
-            body="Type a username — or paste a link like lichess.org/@/DrNykterstein — and pick a game to load onto the board."
-            icon="⚑"
-          />
+          <EmptyState title={t('players.emptyTitle')} body={t('players.emptyBody')} icon="⚑" />
         ) : null}
 
         {loading ? (
@@ -245,12 +243,13 @@ export function ProfileFetch() {
                 <p className="truncate text-xs font-medium text-[var(--text-primary)]">
                   {game.white}
                   {game.whiteRating ? <span className="text-[var(--text-muted)]"> ({game.whiteRating})</span> : null}
-                  <span className="mx-1 text-[var(--text-muted)]">vs</span>
+                  <span className="mx-1 text-[var(--text-muted)]">{t('board.vs')}</span>
                   {game.black}
                   {game.blackRating ? <span className="text-[var(--text-muted)]"> ({game.blackRating})</span> : null}
                 </p>
                 <p className="mt-0.5 truncate text-[0.66rem] text-[var(--text-muted)]">
-                  {game.speed} · {game.rated ? 'rated' : 'casual'} · {relativeDate(game.playedAt)}
+                  {game.speed} · {game.rated ? t('players.rated') : t('players.casual')} ·{' '}
+                  {relativeDate(game.playedAt, t)}
                   {game.opening ? ` · ${game.opening}` : ''}
                 </p>
               </div>

@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import type { Study } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 import { Button, PanelHeader } from './ui/Primitives';
 
 export function ChapterList({
@@ -25,6 +26,7 @@ export function ChapterList({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const { t } = useTranslation();
 
   const commit = () => {
     if (editingId && draft.trim()) onRename(editingId, draft.trim());
@@ -34,10 +36,10 @@ export function ChapterList({
   return (
     <div className="flex min-h-0 flex-col">
       <PanelHeader
-        title="Study"
+        title={t('studio.study')}
         actions={
-          <Button onClick={onAdd} title="Add a chapter">
-            + Chapter
+          <Button onClick={onAdd} title={t('studio.addChapter')}>
+            {t('studio.addChapter')}
           </Button>
         }
       />
@@ -47,7 +49,7 @@ export function ChapterList({
           className="input font-semibold"
           value={study.name}
           onChange={(event) => onRenameStudy(event.target.value)}
-          aria-label="Study name"
+          aria-label={t('studio.studyName')}
         />
       </div>
 

@@ -4,6 +4,8 @@ import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import type { MoveClass } from '@/types';
 import { MOVE_CLASS_META } from '@/lib/analysis/classify';
+import { useClassLabel } from '@/lib/i18n';
+import { ClassificationIcon } from './ClassificationIcon';
 
 export function MoveQualityBadge({
   classification,
@@ -17,26 +19,14 @@ export function MoveQualityBadge({
   className?: string;
 }) {
   const meta = MOVE_CLASS_META[classification];
+  const label = useClassLabel(classification);
 
   return (
     <span className={clsx('inline-flex items-center gap-1.5', className)}>
-      <span
-        title={meta.label}
-        aria-label={meta.label}
-        className="inline-flex shrink-0 items-center justify-center rounded-full font-bold leading-none text-black/85"
-        style={{
-          width: size,
-          height: size,
-          fontSize: size * 0.58,
-          background: meta.color,
-          boxShadow: `0 0 0 1px ${meta.ring}, 0 2px 6px -2px rgba(0,0,0,0.7)`,
-        }}
-      >
-        {meta.glyph}
-      </span>
+      <ClassificationIcon classification={classification} size={size} title={label} />
       {withLabel ? (
         <span className="text-xs font-semibold" style={{ color: meta.color }}>
-          {meta.label}
+          {label}
         </span>
       ) : null}
     </span>
@@ -75,16 +65,17 @@ export function BoardQualityBadge({
         style={{ background: meta.ring }}
         aria-hidden
       />
-      <span
-        className="relative flex h-full w-full items-center justify-center rounded-full font-bold text-black/85"
-        style={{
-          background: meta.color,
-          fontSize: size * 0.58,
-          boxShadow: `0 0 0 2px rgba(8,10,16,0.85), 0 6px 18px -6px rgba(0,0,0,0.9)`,
-        }}
+      <div
+        className="relative rounded-full"
+        style={{ filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.85))' }}
       >
-        {meta.glyph}
-      </span>
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{ boxShadow: '0 0 0 2px rgba(8,10,16,0.9)' }}
+          aria-hidden
+        />
+        <ClassificationIcon classification={classification} size={size} />
+      </div>
     </motion.div>
   );
 }

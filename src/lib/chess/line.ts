@@ -195,7 +195,10 @@ export function moveNumberFor(node: MoveNode): number {
 export interface GameResultInfo {
   readonly over: boolean;
   readonly result: string;
+  /** English fallback text. */
   readonly reason: string;
+  /** i18n key for the reason, so the UI can localize it. */
+  readonly reasonKey: string;
 }
 
 /**
@@ -227,17 +230,31 @@ export function terminalScore(fen: string): { score: Score; checkmate: boolean }
 }
 
 export function describeResult(chess: Chess): GameResultInfo {
-  if (!chess.isGameOver()) return { over: false, result: '*', reason: '' };
+  if (!chess.isGameOver()) return { over: false, result: '*', reason: '', reasonKey: '' };
   if (chess.isCheckmate()) {
-    const winner = chess.turn() === 'w' ? 'Black' : 'White';
-    return { over: true, result: chess.turn() === 'w' ? '0-1' : '1-0', reason: `${winner} wins by checkmate` };
+    const whiteMated = chess.turn() === 'w';
+    return {
+      over: true,
+      result: whiteMated ? '0-1' : '1-0',
+      reason: `${whiteMated ? 'Black' : 'White'} wins by checkmate`,
+      reasonKey: whiteMated ? 'result.blackMate' : 'result.whiteMate',
+    };
   }
-  if (chess.isStalemate()) return { over: true, result: '1/2-1/2', reason: 'Draw by stalemate' };
+  if (chess.isStalemate()) {
+    return { over: true, result: '1/2-1/2', reason: 'Draw by stalemate', reasonKey: 'result.stalemate' };
+  }
   if (chess.isInsufficientMaterial()) {
-    return { over: true, result: '1/2-1/2', reason: 'Draw by insufficient material' };
+    return {
+      over: true,
+      result: '1/2-1/2',
+      reason: 'Draw by insufficient material',
+      reasonKey: 'result.insufficient',
+    };
   }
-  if (chess.isThreefoldRepetition()) return { over: true, result: '1/2-1/2', reason: 'Draw by repetition' };
-  return { over: true, result: '1/2-1/2', reason: 'Draw by the fifty-move rule' };
+  if (chess.isThreefoldRepetition()) {
+    return { over: true, result: '1/2-1/2', reason: 'Draw by repetition', reasonKey: 'result.repetition' };
+  }
+  return { over: true, result: '1/2-1/2', reason: 'Draw by the fifty-move rule', reasonKey: 'result.fiftyMove' };
 }
 
 /** Extracts SAN moves and headers from a PGN string without mutating global state. */

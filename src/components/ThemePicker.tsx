@@ -3,9 +3,10 @@
 import clsx from 'clsx';
 import type { PieceStyleId } from '@/types';
 import { BOARD_THEMES, PIECE_STYLES } from '@/lib/theme/boardThemes';
+import { LANGUAGES, useTranslation } from '@/lib/i18n';
 import { useSettings } from '@/store/settingsStore';
 import { PieceGlyph } from './board/pieces';
-import { PanelHeader, Slider, Toggle } from './ui/Primitives';
+import { PanelHeader, Select, Slider, Toggle } from './ui/Primitives';
 
 function ThemeSwatch({
   id,
@@ -46,14 +47,22 @@ function ThemeSwatch({
 
 export function ThemePicker() {
   const settings = useSettings();
+  const { t } = useTranslation();
 
   return (
     <div className="flex min-h-0 flex-col">
-      <PanelHeader title="Appearance & engine" subtitle="Everything here is saved to this browser" />
+      <PanelHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
+        <Select
+          label={t('settings.language')}
+          value={settings.language}
+          onChange={(value) => settings.set('language', value)}
+          options={LANGUAGES.map((lang) => ({ value: lang.id, label: lang.label }))}
+        />
+
         <section>
-          <p className="stat-label mb-2">Board theme</p>
+          <p className="stat-label mb-2">{t('settings.boardTheme')}</p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {BOARD_THEMES.map((theme) => (
               <ThemeSwatch
@@ -70,7 +79,7 @@ export function ThemePicker() {
         </section>
 
         <section>
-          <p className="stat-label mb-2">Piece style</p>
+          <p className="stat-label mb-2">{t('settings.pieceStyle')}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {PIECE_STYLES.map((style) => (
               <button
@@ -99,77 +108,77 @@ export function ThemePicker() {
         </section>
 
         <section className="space-y-1">
-          <p className="stat-label mb-1">Board</p>
+          <p className="stat-label mb-1">{t('settings.board')}</p>
           <Toggle
-            label="Coordinates"
+            label={t('settings.coordinates')}
             checked={settings.showCoordinates}
             onChange={(value) => settings.set('showCoordinates', value)}
           />
           <Toggle
-            label="Legal move hints"
-            hint="Dots on the squares a selected piece can reach"
+            label={t('settings.legalMoves')}
+            hint={t('settings.legalMovesHint')}
             checked={settings.showLegalMoves}
             onChange={(value) => settings.set('showLegalMoves', value)}
           />
           <Toggle
-            label="Evaluation bar"
+            label={t('settings.evalBar')}
             checked={settings.showEvalBar}
             onChange={(value) => settings.set('showEvalBar', value)}
           />
           <Toggle
-            label="Best-move arrow"
+            label={t('settings.bestMoveArrow')}
             checked={settings.showBestMoveArrow}
             onChange={(value) => settings.set('showBestMoveArrow', value)}
           />
           <Toggle
-            label="Move quality badges"
-            hint="Animated icons on the board after each classified move"
+            label={t('settings.badges')}
+            hint={t('settings.badgesHint')}
             checked={settings.showClassificationBadges}
             onChange={(value) => settings.set('showClassificationBadges', value)}
           />
           <Slider
-            label="Animation speed"
+            label={t('settings.animationSpeed')}
             min={0}
             max={600}
             step={20}
             value={settings.animationMs}
             onChange={(value) => settings.set('animationMs', value)}
-            format={(value) => (value === 0 ? 'instant' : `${value}ms`)}
+            format={(value) => (value === 0 ? t('settings.instant') : `${value}ms`)}
           />
         </section>
 
         <section className="space-y-1">
-          <p className="stat-label mb-1">Engine</p>
+          <p className="stat-label mb-1">{t('settings.engine')}</p>
           <Toggle
-            label="Live analysis"
-            hint="Evaluate the position continuously as you browse"
+            label={t('settings.live')}
+            hint={t('settings.liveHint')}
             checked={settings.liveAnalysis}
             onChange={(value) => settings.set('liveAnalysis', value)}
           />
           <Slider
-            label="Live search depth"
+            label={t('settings.liveDepth')}
             min={8}
             max={26}
             value={settings.engineDepth}
             onChange={(value) => settings.set('engineDepth', value)}
           />
           <Slider
-            label="Candidate lines (MultiPV)"
+            label={t('settings.multipv')}
             min={1}
             max={5}
             value={settings.multiPv}
             onChange={(value) => settings.set('multiPv', value)}
           />
           <Slider
-            label="Game review depth"
+            label={t('settings.reviewDepth')}
             min={8}
             max={22}
             value={settings.reviewDepth}
             onChange={(value) => settings.set('reviewDepth', value)}
-            format={(value) => `${value} (slower = sharper)`}
+            format={(value) => t('settings.reviewDepthFmt', { n: value })}
           />
           <Slider
-            label="Hash size"
+            label={t('settings.hash')}
             min={16}
             max={256}
             step={16}
@@ -178,7 +187,7 @@ export function ThemePicker() {
             format={(value) => `${value} MB`}
           />
           <p className="pt-1 text-[0.66rem] leading-relaxed text-[var(--text-muted)]">
-            Hash changes take effect the next time the engine restarts (reload the page).
+            {t('settings.hashNote')}
           </p>
         </section>
 
@@ -187,7 +196,7 @@ export function ThemePicker() {
           onClick={settings.resetDefaults}
           className="text-xs text-[var(--text-muted)] underline-offset-2 hover:text-white hover:underline"
         >
-          Reset everything to defaults
+          {t('settings.reset')}
         </button>
       </div>
     </div>

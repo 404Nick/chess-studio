@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useEffect, useMemo, useRef } from 'react';
 import type { Line, MoveNode } from '@/types';
 import { moveNumberFor } from '@/lib/chess/line';
+import { useTranslation } from '@/lib/i18n';
 import { MoveQualityBadge } from './MoveQualityBadge';
 import { EmptyState } from './ui/Primitives';
 
@@ -83,6 +84,7 @@ export function MoveList({
 }) {
   const rows = useMemo(() => buildRows(line), [line]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const active = containerRef.current?.querySelector('[data-active]');
@@ -90,13 +92,7 @@ export function MoveList({
   }, [line.cursor]);
 
   if (line.moves.length === 0) {
-    return (
-      <EmptyState
-        title="No moves yet"
-        body="Play a move on the board, paste a PGN, or load a game from a player profile."
-        icon="♟"
-      />
-    );
+    return <EmptyState title={t('moves.none')} body={t('moves.noneBody')} icon="♟" />;
   }
 
   const activeNode = line.cursor >= 0 ? line.moves[line.cursor] : null;
