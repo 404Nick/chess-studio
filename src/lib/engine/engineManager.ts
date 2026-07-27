@@ -41,3 +41,32 @@ export function disposeLiveEngine(): void {
 export function createReviewEngine(hashMb = 64): Promise<StockfishEngine> {
   return StockfishEngine.create(hashMb);
 }
+
+/**
+ * A persistent engine that plays the opponent's moves in the play-vs-engine mode. Kept
+ * separate from the live-analysis engine so a game in progress never fights the board's
+ * evaluation for the worker.
+ */
+let playPromise: Promise<StockfishEngine> | null = null;
+let playInstance: StockfishEngine | null = null;
+
+export function getPlayEngine(hashMb = 32): Promise<StockfishEngine> {
+  if (!playPromise) {
+    playPromise = StockfishEngine.create(hashMb)
+      .then((engine) => {
+        playInstance = engine;
+        return engine;
+      })
+      .catch((err) => {
+        playPromise = null;
+        throw err;
+      });
+  }
+  return playPromise;
+}
+
+export function disposePlayEngine(): void {
+  playInstance?.dispose();
+  playInstance = null;
+  playPromise = null;
+}

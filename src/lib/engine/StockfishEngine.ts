@@ -244,6 +244,24 @@ export class StockfishEngine {
     this.send(`setoption name ${name} value ${value}`);
   }
 
+  /**
+   * Sets Stockfish's Skill Level (0 = deliberately weak, 20 = full strength). Used by
+   * the play-vs-engine mode; takes effect on the next search.
+   */
+  setSkillLevel(level: number): void {
+    this.setOption('Skill Level', String(Math.max(0, Math.min(20, Math.round(level)))));
+  }
+
+  /** Caps the engine near the given Elo, or lifts the cap when null. */
+  setEloLimit(elo: number | null): void {
+    if (elo === null) {
+      this.setOption('UCI_LimitStrength', 'false');
+      return;
+    }
+    this.setOption('UCI_LimitStrength', 'true');
+    this.setOption('UCI_Elo', String(Math.max(1320, Math.min(3190, Math.round(elo)))));
+  }
+
   private send(command: string): void {
     this.worker?.postMessage(command);
   }

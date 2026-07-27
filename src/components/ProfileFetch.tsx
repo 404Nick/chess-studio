@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Platform, PlayerProfile, RemoteGame } from '@/types';
 import { getGames, getProfile } from '@/lib/api/client';
+import { addRemoteGames, putGame, recordFromRemote } from '@/lib/games/gamesDb';
 import { extractUsername, isValidUsername } from '@/lib/api/shared';
 import { type TFunction, useTranslation } from '@/lib/i18n';
 import { useGame } from '@/store/gameStore';
@@ -42,6 +43,7 @@ export function ProfileFetch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
 
   const controllerRef = useRef<AbortController | null>(null);
   const loadPgn = useGame((state) => state.loadPgn);
@@ -114,6 +116,18 @@ export function ProfileFetch() {
     },
     [loadPgn, setHeaders, t],
   );
+
+  const saveGame = useCallback(async (game: RemoteGame) => {
+    const record = recordFromRemote(game);
+    if (!record) return;
+    await putGame(record);
+    setSavedIds((prev) => new Set(prev).add(game.id));
+  }, []);
+
+  const saveAll = useCallback(async () => {
+    await addRemoteGames(games);
+    setSavedIds(new Set(games.map((game) => game.id)));
+  }, [games]);
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -228,34 +242,62 @@ export function ProfileFetch() {
           </div>
         ) : null}
 
-        <div className="divide-y divide-white/[0.04]">
-          {games.map((game) => (
+        {games.length > 0 ? (
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <span className="stat-label">
+              {games.length} {t('common.games')}
+            </span>
             <button
-              key={game.id}
               type="button"
-              onClick={() => openGame(game)}
-              className={clsx(
-                'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-white/[0.06]',
-                loadedId === game.id && 'bg-[rgba(110,168,254,0.12)]',
-              )}
+              onClick={() => void saveAll()}
+              className="text-[0.68rem] text-[var(--text-muted)] hover:text-white"
             >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-[var(--text-primary)]">
-                  {game.white}
-                  {game.whiteRating ? <span className="text-[var(--text-muted)]"> ({game.whiteRating})</span> : null}
-                  <span className="mx-1 text-[var(--text-muted)]">{t('board.vs')}</span>
-                  {game.black}
-                  {game.blackRating ? <span className="text-[var(--text-muted)]"> ({game.blackRating})</span> : null}
-                </p>
-                <p className="mt-0.5 truncate text-[0.66rem] text-[var(--text-muted)]">
-                  {game.speed} · {game.rated ? t('players.rated') : t('players.casual')} ·{' '}
-                  {relativeDate(game.playedAt, t)}
-                  {game.opening ? ` · ${game.opening}` : ''}
-                </p>
-              </div>
-              <ResultTag result={game.result} />
+              {t('players.saveAll')}
             </button>
-          ))}
+          </div>
+        ) : null}
+
+        <div className="divide-y divide-white/[0.04]">
+          {games.map((game) => {
+            const saved = savedIds.has(game.id);
+            return (
+              <div
+                key={game.id}
+                className={clsx(
+                  'flex w-full items-center gap-2 px-3 py-2 transition-colors hover:bg-white/[0.06]',
+                  loadedId === game.id && 'bg-[rgba(110,168,254,0.12)]',
+                )}
+              >
+                <button type="button" onClick={() => openGame(game)} className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                    {game.white}
+                    {game.whiteRating ? <span className="text-[var(--text-muted)]"> ({game.whiteRating})</span> : null}
+                    <span className="mx-1 text-[var(--text-muted)]">{t('board.vs')}</span>
+                    {game.black}
+                    {game.blackRating ? <span className="text-[var(--text-muted)]"> ({game.blackRating})</span> : null}
+                  </p>
+                  <p className="mt-0.5 truncate text-[0.66rem] text-[var(--text-muted)]">
+                    {game.speed} · {game.rated ? t('players.rated') : t('players.casual')} ·{' '}
+                    {relativeDate(game.playedAt, t)}
+                    {game.opening ? ` · ${game.opening}` : ''}
+                  </p>
+                </button>
+                <ResultTag result={game.result} />
+                <button
+                  type="button"
+                  onClick={() => void saveGame(game)}
+                  aria-label={t('players.save')}
+                  title={saved ? t('players.saved') : t('players.save')}
+                  className={clsx(
+                    'text-sm transition-colors',
+                    saved ? 'text-[#7fce6b]' : 'text-[var(--text-muted)] hover:text-white',
+                  )}
+                >
+                  {saved ? '✓' : '↓'}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

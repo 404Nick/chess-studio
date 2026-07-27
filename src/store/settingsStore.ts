@@ -21,8 +21,16 @@ export interface SettingsValues {
   multiPv: number;
   hashMb: number;
   liveAnalysis: boolean;
+  /** Query Lichess' cloud eval cache before falling back to the local engine. */
+  cloudEval: boolean;
+  /** Use the Lichess 7-piece tablebase for exact endgame evaluations. */
+  tablebase: boolean;
   reviewDepth: number;
   explorerDb: 'lichess' | 'masters';
+  /** Play move/capture/check/blunder/game-end sound effects. */
+  soundEnabled: boolean;
+  /** Sound effect volume, 0–100. */
+  soundVolume: number;
 }
 
 export interface SettingsState extends SettingsValues {
@@ -44,8 +52,12 @@ const DEFAULTS: SettingsValues = {
   multiPv: 3,
   hashMb: 128,
   liveAnalysis: true,
+  cloudEval: true,
+  tablebase: true,
   reviewDepth: 16,
   explorerDb: 'lichess',
+  soundEnabled: true,
+  soundVolume: 65,
 };
 
 export const useSettings = create<SettingsState>()(

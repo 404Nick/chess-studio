@@ -155,6 +155,18 @@ export function ThemePicker() {
             checked={settings.liveAnalysis}
             onChange={(value) => settings.set('liveAnalysis', value)}
           />
+          <Toggle
+            label={t('settings.cloudEval')}
+            hint={t('settings.cloudEvalHint')}
+            checked={settings.cloudEval}
+            onChange={(value) => settings.set('cloudEval', value)}
+          />
+          <Toggle
+            label={t('settings.tablebase')}
+            hint={t('settings.tablebaseHint')}
+            checked={settings.tablebase}
+            onChange={(value) => settings.set('tablebase', value)}
+          />
           <Slider
             label={t('settings.liveDepth')}
             min={8}
@@ -189,6 +201,25 @@ export function ThemePicker() {
           <p className="pt-1 text-[0.66rem] leading-relaxed text-[var(--text-muted)]">
             {t('settings.hashNote')}
           </p>
+        </section>
+
+        <section className="space-y-1">
+          <p className="stat-label mb-1">{t('settings.sound')}</p>
+          <Toggle
+            label={t('settings.soundEnabled')}
+            hint={t('settings.soundHint')}
+            checked={settings.soundEnabled}
+            onChange={(value) => settings.set('soundEnabled', value)}
+          />
+          <Slider
+            label={t('settings.soundVolume')}
+            min={0}
+            max={100}
+            step={5}
+            value={settings.soundVolume}
+            onChange={(value) => settings.set('soundVolume', value)}
+            format={(value) => `${value}%`}
+          />
         </section>
 
         <button

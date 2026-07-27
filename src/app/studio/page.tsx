@@ -7,6 +7,7 @@ import { currentFen, describeResult, chessAtCursor, parseUci } from '@/lib/chess
 import { fenTurn } from '@/lib/chess/fen';
 import { downloadText, lineToPgn, safeFilename, studyToPgn } from '@/lib/chess/pgn';
 import { findOpening } from '@/lib/openings';
+import { playMoveSound } from '@/lib/sound/sounds';
 import { SHAPE_COLORS, getTheme } from '@/lib/theme/boardThemes';
 import { useBoardShortcuts } from '@/hooks/useBoardShortcuts';
 import { useEngine, useLiveAnalysis } from '@/hooks/useStockfish';
@@ -83,10 +84,16 @@ export default function StudioPage() {
     return () => window.clearTimeout(id);
   }, []);
 
-  const { analysis, thinking } = useLiveAnalysis(fen, {
-    enabled: analysisArmed && settings.liveAnalysis && engine.ready && !editorOpen,
+  const { analysis, thinking, source } = useLiveAnalysis(fen, {
+    enabled:
+      analysisArmed &&
+      settings.liveAnalysis &&
+      (engine.ready || settings.cloudEval || settings.tablebase) &&
+      !editorOpen,
     depth: settings.engineDepth,
     multiPv: settings.multiPv,
+    cloudEval: settings.cloudEval,
+    tablebase: settings.tablebase,
   });
 
   useBoardShortcuts(
@@ -94,7 +101,19 @@ export default function StudioPage() {
     !editorOpen,
   );
 
-  const handleMove = useCallback((move: BoardMove) => Boolean(play(move)), [play]);
+  const handleMove = useCallback(
+    (move: BoardMove) => {
+      const played = play(move);
+      if (!played) return false;
+      const s = useSettings.getState();
+      if (s.soundEnabled) {
+        const over = chessAtCursor(activeChapter(useStudio.getState()).line).isGameOver();
+        playMoveSound(played, { volume: s.soundVolume, gameOver: over });
+      }
+      return true;
+    },
+    [play],
+  );
 
   const handleShapes = useCallback(
     (nextShapes: BoardShape[]) => setShapes(line.cursor, nextShapes),
@@ -355,6 +374,7 @@ export default function StudioPage() {
             turn={turn}
             thinking={thinking}
             depth={settings.engineDepth}
+            solved={source === 'tablebase'}
             onPlayMove={(uci) => {
               const parsed = parseUci(uci);
               if (parsed) play(parsed);

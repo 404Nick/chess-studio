@@ -20,6 +20,7 @@ export function EngineLines({
   thinking,
   depth,
   onPlayMove,
+  solved = false,
   className,
 }: {
   lines: readonly EngineLine[];
@@ -27,6 +28,8 @@ export function EngineLines({
   thinking: boolean;
   depth: number;
   onPlayMove?(uci: string): void;
+  /** These lines come from the tablebase (exact, depthless) — badge them "TB". */
+  solved?: boolean;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -74,7 +77,7 @@ export function EngineLines({
           </p>
 
           <span className="shrink-0 pt-0.5 font-mono text-[0.62rem] text-[var(--text-muted)]">
-            d{line.depth}
+            {solved ? t('analysis.tb') : line.depth > 0 ? `d${line.depth}` : ''}
           </span>
         </motion.div>
       ))}
@@ -85,8 +88,14 @@ export function EngineLines({
           {thinking ? t('analysis.searching') : t('analysis.idle')}
         </span>
         <span className="font-mono tabular-nums">
-          depth {lines[0]?.depth ?? 0}/{depth}
-          {lines[0]?.nodes ? ` · ${(lines[0].nodes / 1000).toFixed(0)}k nodes` : ''}
+          {solved ? (
+            t('analysis.solved')
+          ) : (
+            <>
+              depth {lines[0]?.depth ?? 0}/{depth}
+              {lines[0]?.nodes ? ` · ${(lines[0].nodes / 1000).toFixed(0)}k nodes` : ''}
+            </>
+          )}
         </span>
       </div>
     </div>

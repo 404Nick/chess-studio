@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Line } from '@/types';
 import { ReviewCancelledError, reviewGame } from '@/lib/analysis/review';
 import { createReviewEngine } from '@/lib/engine/engineManager';
+import { putReview } from '@/lib/games/gamesDb';
 import { bookPlyCount, findOpening } from '@/lib/openings';
 import { useGame } from '@/store/gameStore';
 import { useSettings } from '@/store/settingsStore';
@@ -78,6 +79,8 @@ export function useGameReview(): GameReviewHandle {
           shouldCancel: () => cancelRef.current,
         });
         applyReview(result.line, result.review);
+        // Persist so re-opening this game restores the review without re-analysing.
+        void putReview(result.line, result.review).catch(() => {});
       } catch (err) {
         if (!(err instanceof ReviewCancelledError)) {
           setError(err instanceof Error ? err.message : 'The review could not be completed.');

@@ -1,9 +1,11 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
-import { useCallback } from 'react';
-import type { Color, PositionAnalysis } from '@/types';
+import { motion } from 'framer-motion';
+import { useCallback, useEffect, useMemo } from 'react';
+import type { Color, MoveClass, PositionAnalysis } from '@/types';
 import { MOVE_CLASS_META } from '@/lib/analysis/classify';
+import type { AnalysisSource } from '@/hooks/useStockfish';
+import { getCachedReview, lineKey } from '@/lib/games/gamesDb';
 import { useGameReview } from '@/hooks/useGameReview';
 import { useClassLabel, useTranslation } from '@/lib/i18n';
 import { currentNode, useGame } from '@/store/gameStore';
@@ -19,17 +21,39 @@ export function AnalysisPanel({
   turn,
   onPlayMove,
   engineUnavailable,
+  source = null,
 }: {
   analysis: PositionAnalysis;
   thinking: boolean;
   turn: Color;
   onPlayMove(uci: string): void;
   engineUnavailable: boolean;
+  source?: AnalysisSource;
 }) {
   const line = useGame((state) => state.line);
   const review = useGame((state) => state.review);
   const navigate = useGame((state) => state.navigate);
+  const applyReview = useGame((state) => state.applyReview);
   const node = useGame(currentNode);
+
+  // Restore a previously computed review from IndexedDB when this game is reopened,
+  // so we don't re-grind the engine over a game we've already analysed. Keyed by the
+  // line's content hash, which is stable across navigation.
+  const reviewKey = useMemo(() => (line.moves.length ? lineKey(line) : ''), [line]);
+  useEffect(() => {
+    if (review || !reviewKey) return undefined;
+    let cancelled = false;
+    getCachedReview(useGame.getState().line)
+      .then((cached) => {
+        if (cancelled || !cached) return;
+        // Keep the user where they are in the game.
+        applyReview({ ...cached.line, cursor: useGame.getState().line.cursor }, cached.review);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reviewKey, review, applyReview]);
 
   const reviewDepth = useSettings((state) => state.reviewDepth);
   const engineDepth = useSettings((state) => state.engineDepth);
@@ -41,6 +65,29 @@ export function AnalysisPanel({
   const startReview = useCallback(() => {
     void gameReview.start(line, reviewDepth);
   }, [gameReview, line, reviewDepth]);
+
+  // Indices of every sub-par move, for the "jump to mistakes" stepper.
+  const mistakeIndices = useMemo(() => {
+    const flagged = new Set<MoveClass>(['inaccuracy', 'mistake', 'blunder']);
+    return line.moves.reduce<number[]>((acc, move, index) => {
+      if (move.assessment && flagged.has(move.assessment.classification)) acc.push(index);
+      return acc;
+    }, []);
+  }, [line]);
+
+  const gotoMistake = useCallback(
+    (direction: 1 | -1) => {
+      if (mistakeIndices.length === 0) return;
+      const cursor = line.cursor;
+      const target =
+        direction === 1
+          ? (mistakeIndices.find((index) => index > cursor) ?? mistakeIndices[0])
+          : ([...mistakeIndices].reverse().find((index) => index < cursor) ??
+            mistakeIndices[mistakeIndices.length - 1]);
+      navigate(target);
+    },
+    [mistakeIndices, line.cursor, navigate],
+  );
 
   const assessment = node?.assessment ?? null;
   const meta = assessment ? MOVE_CLASS_META[assessment.classification] : null;
@@ -79,14 +126,16 @@ export function AnalysisPanel({
 
         {gameReview.error ? <ErrorNote>{gameReview.error}</ErrorNote> : null}
 
-        {/* ---- Why this move? ---- */}
-        <AnimatePresence mode="wait">
-          {assessment && meta && node ? (
+        {/* ---- Why this move? ----
+         * A plain keyed motion.div (not AnimatePresence mode="wait"): remounting on
+         * node.id change makes the card always reflect the *current* move. mode="wait"
+         * held the exiting card until its exit finished, leaving the panel a move
+         * behind the board on every navigation. */}
+        {assessment && meta && node ? (
             <motion.div
               key={node.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
               className="overflow-hidden rounded-xl border"
               style={{
@@ -123,12 +172,18 @@ export function AnalysisPanel({
               ) : null}
             </motion.div>
           ) : null}
-        </AnimatePresence>
 
         {/* ---- Engine candidate moves ---- */}
         <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
-          <div className="border-b border-white/[0.06] px-3 py-1.5">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-1.5">
             <span className="panel-title">{t('analysis.candidates')}</span>
+            {source && analysis.lines.length > 0 ? (
+              <span className="chip" title={t(`analysis.${source}Hint`)}>
+                {source === 'tablebase' ? '📖 ' : source === 'cloud' ? '☁ ' : '⚙ '}
+                {t(`analysis.${source}`)}
+                {analysis.depth ? ` · d${analysis.depth}` : ''}
+              </span>
+            ) : null}
           </div>
           <EngineLines
             lines={analysis.lines}
@@ -136,11 +191,27 @@ export function AnalysisPanel({
             thinking={thinking}
             depth={engineDepth}
             onPlayMove={onPlayMove}
+            solved={source === 'tablebase'}
           />
         </div>
 
         {/* ---- Full-game report ---- */}
-        {review ? <GameReviewSummary review={review} cursor={line.cursor} onSelect={navigate} /> : null}
+        {review ? (
+          <>
+            <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-black/20 px-3 py-1.5">
+              <span className="stat-label">{t('review.mistakes', { n: mistakeIndices.length })}</span>
+              <div className="flex gap-1.5">
+                <Button onClick={() => gotoMistake(-1)} disabled={mistakeIndices.length === 0}>
+                  {t('review.prevMistake')}
+                </Button>
+                <Button onClick={() => gotoMistake(1)} disabled={mistakeIndices.length === 0}>
+                  {t('review.nextMistake')}
+                </Button>
+              </div>
+            </div>
+            <GameReviewSummary review={review} cursor={line.cursor} onSelect={navigate} />
+          </>
+        ) : null}
       </div>
     </div>
   );

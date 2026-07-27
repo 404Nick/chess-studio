@@ -13,6 +13,9 @@ import { useStudio } from '@/store/studioStore';
 const NAV = [
   { href: '/', key: 'nav.analysis' },
   { href: '/studio', key: 'nav.studio' },
+  { href: '/library', key: 'nav.library' },
+  { href: '/stats', key: 'nav.stats' },
+  { href: '/play', key: 'nav.play' },
 ];
 
 const STATUS_KEY: Record<EngineStatus, string> = {

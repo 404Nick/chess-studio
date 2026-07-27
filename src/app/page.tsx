@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { BoardShape, MoveClass, Square } from '@/types';
+import type { BoardShape, MoveClass, MoveNode, Square } from '@/types';
 import { assessSingleMove } from '@/lib/analysis/review';
+import { playMoveSound, playSound } from '@/lib/sound/sounds';
 import { fenTurn, validateFen } from '@/lib/chess/fen';
 import { currentFen, describeResult, chessAtCursor, parseUci } from '@/lib/chess/line';
 import { bookPlyCount, findOpening } from '@/lib/openings';
@@ -10,7 +11,7 @@ import { getTheme, SHAPE_COLORS } from '@/lib/theme/boardThemes';
 import { useAnalyseOnce, useEngine, useLiveAnalysis } from '@/hooks/useStockfish';
 import { useBoardShortcuts } from '@/hooks/useBoardShortcuts';
 import { useTranslation } from '@/lib/i18n';
-import { currentNode, currentShapes, sanUpToCursor, useGame } from '@/store/gameStore';
+import { currentNode, currentShapes, isGameOver, sanUpToCursor, useGame } from '@/store/gameStore';
 // `sanUpToCursor` is a plain helper (it allocates) and is derived with useMemo below.
 import { useSettings } from '@/store/settingsStore';
 import { AnalysisPanel } from '@/components/AnalysisPanel';
@@ -78,10 +79,14 @@ export default function AnalysisPage() {
     return () => window.clearTimeout(id);
   }, []);
 
-  const { analysis, thinking } = useLiveAnalysis(fen, {
-    enabled: analysisArmed && settings.liveAnalysis && engine.ready,
+  // Cloud eval can serve a position even before the local engine finishes booting.
+  const { analysis, thinking, source } = useLiveAnalysis(fen, {
+    enabled:
+      analysisArmed && settings.liveAnalysis && (engine.ready || settings.cloudEval || settings.tablebase),
     depth: settings.engineDepth,
     multiPv: settings.multiPv,
+    cloudEval: settings.cloudEval,
+    tablebase: settings.tablebase,
   });
 
   const analyseOnce = useAnalyseOnce();
@@ -116,17 +121,21 @@ export default function AnalysisPage() {
           .map((move) => move.san);
         const match = findOpening(history);
 
-        setAssessment(
-          index,
-          assessSingleMove({
-            node: played,
-            before,
-            after,
-            bookPlies: bookPlyCount(history),
-            openingName: match?.entry.name ?? null,
-            lang: useSettings.getState().language,
-          }),
-        );
+        const assessment = assessSingleMove({
+          node: played,
+          before,
+          after,
+          bookPlies: bookPlyCount(history),
+          openingName: match?.entry.name ?? null,
+          lang: useSettings.getState().language,
+        });
+        setAssessment(index, assessment);
+
+        // A short "uh-oh" cue a beat after the move lands, once the verdict is in.
+        const audio = useSettings.getState();
+        if (audio.soundEnabled && assessment.classification === 'blunder') {
+          playSound('blunder', audio.soundVolume);
+        }
       } catch {
         // Engine unavailable — the move still stands, just without a verdict.
       }
@@ -134,16 +143,29 @@ export default function AnalysisPage() {
     [analyseOnce, setAssessment, settings.engineDepth],
   );
 
+  /** Plays the move sound and kicks off live classification for a freshly played move. */
+  const afterPlay = useCallback(
+    (played: MoveNode | null) => {
+      if (!played) return;
+      const s = useSettings.getState();
+      if (s.soundEnabled) {
+        playMoveSound(played, { volume: s.soundVolume, gameOver: isGameOver(useGame.getState()) });
+      }
+      if (s.liveAnalysis && engine.ready) {
+        void classifyLatest(useGame.getState().line.cursor);
+      }
+    },
+    [engine.ready, classifyLatest],
+  );
+
   const handleMove = useCallback(
     (move: BoardMove): boolean => {
       const played = play(move);
       if (!played) return false;
-      if (settings.liveAnalysis && engine.ready) {
-        void classifyLatest(useGame.getState().line.cursor);
-      }
+      afterPlay(played);
       return true;
     },
-    [play, settings.liveAnalysis, engine.ready, classifyLatest],
+    [play, afterPlay],
   );
 
   const playUci = useCallback(
@@ -157,12 +179,9 @@ export default function AnalysisPage() {
 
   const playSan = useCallback(
     (san: string) => {
-      const played = play(san);
-      if (played && settings.liveAnalysis && engine.ready) {
-        void classifyLatest(useGame.getState().line.cursor);
-      }
+      afterPlay(play(san));
     },
-    [play, settings.liveAnalysis, engine.ready, classifyLatest],
+    [play, afterPlay],
   );
 
   /* ---------------- shapes & navigation ---------------- */
@@ -313,6 +332,7 @@ export default function AnalysisPage() {
               turn={turn}
               onPlayMove={playUci}
               engineUnavailable={!engine.ready}
+              source={source}
             />
           ) : null}
           {tab === 'opening' ? (
