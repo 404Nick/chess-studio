@@ -416,6 +416,15 @@ export async function putReview(line: Line, review: GameReview): Promise<void> {
   });
 }
 
+/** Every stored review (used to mine tactics from past blunders). */
+export async function getAllReviews(): Promise<{ line: Line; review: GameReview }[]> {
+  const db = await openDb();
+  const all = await toPromise(
+    db.transaction(REVIEW_STORE).objectStore(REVIEW_STORE).getAll() as IDBRequest<ReviewRecord[]>,
+  );
+  return all.map((record) => ({ line: record.line, review: record.review }));
+}
+
 /** Looks up a cached review for `line`; returns null on a miss. */
 export async function getCachedReview(line: Line): Promise<{ line: Line; review: GameReview } | null> {
   if (line.moves.length === 0) return null;
