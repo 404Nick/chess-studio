@@ -9,6 +9,9 @@ export const metadata: Metadata = {
     'A Stockfish-powered chess analysis board with move classification, a massive opening explorer, Lichess/Chess.com game import and a full study studio.',
   applicationName: 'Chess Studio',
   keywords: ['chess', 'stockfish', 'analysis', 'opening explorer', 'lichess', 'chess.com', 'pgn'],
+  manifest: '/manifest.webmanifest',
+  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Chess Studio' },
 };
 
 export const viewport: Viewport = {

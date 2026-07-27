@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { GameFilter, GameRecord } from '@/lib/games/gamesDb';
 import { clearGames, countGames, deleteGame, importPgnFile, queryGames } from '@/lib/games/gamesDb';
+import { useBatchReview } from '@/hooks/useBatchReview';
 import { useTranslation } from '@/lib/i18n';
 import { useGame } from '@/store/gameStore';
-import { Button, EmptyState, ErrorNote, Panel, PanelHeader, Select, Spinner } from '@/components/ui/Primitives';
+import { useSettings } from '@/store/settingsStore';
+import { Button, EmptyState, ErrorNote, Panel, PanelHeader, ProgressBar, Select, Spinner } from '@/components/ui/Primitives';
 
 const RESULT_OPTIONS = [
   { value: '', key: 'library.any' },
@@ -62,6 +64,9 @@ export default function LibraryPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const batch = useBatchReview();
+  const reviewDepth = useSettings((state) => state.reviewDepth);
 
   const filter = useMemo<GameFilter>(
     () => ({
@@ -164,6 +169,15 @@ export default function LibraryPage() {
     setDateTo('');
     setFen('');
   }, []);
+
+  const unreviewed = useMemo(() => records.filter((record) => !record.reviewedAt).length, [records]);
+
+  const startBatch = useCallback(async () => {
+    const pending = records.filter((record) => !record.reviewedAt);
+    if (pending.length === 0) return;
+    await batch.start(pending, Math.min(reviewDepth, 12));
+    await refresh(filter);
+  }, [records, batch, reviewDepth, refresh, filter]);
 
   const hasFilters = Boolean(text || eco || result || origin || dateFrom || dateTo || fen);
 
@@ -300,8 +314,37 @@ export default function LibraryPage() {
         <PanelHeader
           title={t('library.title')}
           subtitle={t('library.showing', { n: records.length })}
-          actions={loading ? <Spinner /> : null}
+          actions={
+            batch.running ? (
+              <Button variant="ghost" onClick={batch.cancel}>
+                <Spinner />
+                {t('common.cancel')}
+              </Button>
+            ) : unreviewed > 0 ? (
+              <Button onClick={() => void startBatch()}>{t('library.reviewAll', { n: unreviewed })}</Button>
+            ) : loading ? (
+              <Spinner />
+            ) : null
+          }
         />
+
+        {batch.running ? (
+          <div className="space-y-1.5 border-b border-white/[0.06] px-3 py-2">
+            <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+              <span>{t('library.reviewing')}</span>
+              <span className="font-mono tabular-nums">
+                {batch.done}/{batch.total}
+              </span>
+            </div>
+            <ProgressBar value={batch.done} max={batch.total} />
+          </div>
+        ) : null}
+
+        {batch.error ? (
+          <div className="p-3">
+            <ErrorNote>{batch.error}</ErrorNote>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="p-3">
@@ -339,6 +382,14 @@ export default function LibraryPage() {
                   {record.origin !== 'local' ? ` · ${record.origin}` : ''}
                 </p>
               </button>
+              {record.accuracyWhite !== undefined ? (
+                <span
+                  className="hidden shrink-0 font-mono text-[0.62rem] tabular-nums text-[var(--text-muted)] sm:inline"
+                  title={t('library.accuracy')}
+                >
+                  {record.accuracyWhite}/{record.accuracyBlack}
+                </span>
+              ) : null}
               <ResultTag result={record.result} />
               <button
                 type="button"

@@ -175,7 +175,7 @@ export default function StatsPage() {
         />
         <Tile label={t('stats.whiteWins')} value={String(stats.results.white)} />
         <Tile label={t('stats.blackWins')} value={String(stats.results.black)} />
-        <Tile label={t('stats.openings')} value={String(stats.topOpenings.length)} />
+        <Tile label={t('stats.reviewed')} value={`${stats.reviewed}/${stats.total}`} />
       </div>
 
       {stats.player ? (
@@ -184,11 +184,37 @@ export default function StatsPage() {
           {stats.player.games === 0 ? (
             <p className="p-3 text-xs text-[var(--text-muted)]">{t('stats.noPlayerGames')}</p>
           ) : (
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <RecordCard title={t('stats.overall')} record={stats.player.overall} />
-              <RecordCard title={t('stats.asWhite')} record={stats.player.asWhite} />
-              <RecordCard title={t('stats.asBlack')} record={stats.player.asBlack} />
-            </div>
+            <>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <RecordCard title={t('stats.overall')} record={stats.player.overall} />
+                <RecordCard title={t('stats.asWhite')} record={stats.player.asWhite} />
+                <RecordCard title={t('stats.asBlack')} record={stats.player.asBlack} />
+              </div>
+              {stats.player.reviewedGames > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-black/20 px-3 py-2 text-xs">
+                  <span className="stat-label">{t('stats.accuracyLabel')}</span>
+                  <span>
+                    {t('stats.overall')}{' '}
+                    <b className="font-mono text-[var(--accent)]">{stats.player.accuracy.overall}%</b>
+                  </span>
+                  {stats.player.accuracy.white !== null ? (
+                    <span>
+                      {t('stats.asWhite')} <b className="font-mono text-white">{stats.player.accuracy.white}%</b>
+                    </span>
+                  ) : null}
+                  {stats.player.accuracy.black !== null ? (
+                    <span>
+                      {t('stats.asBlack')} <b className="font-mono text-white">{stats.player.accuracy.black}%</b>
+                    </span>
+                  ) : null}
+                  <span className="text-[var(--text-muted)]">
+                    · {t('stats.fromReviewed', { n: stats.player.reviewedGames })}
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-2 text-[0.66rem] text-[var(--text-muted)]">{t('stats.notReviewed')}</p>
+              )}
+            </>
           )}
         </Panel>
       ) : null}

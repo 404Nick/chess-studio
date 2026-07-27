@@ -26,10 +26,14 @@ export interface PlayerStats {
   asBlack: Record3;
   bestOpenings: OpeningStat[];
   worstOpenings: OpeningStat[];
+  /** Average review accuracy (from batch/analysis reviews), null when none reviewed. */
+  accuracy: { overall: number | null; white: number | null; black: number | null };
+  reviewedGames: number;
 }
 
 export interface LibraryStats {
   total: number;
+  reviewed: number;
   decisive: number;
   draws: number;
   /** Whole-library result split. */
@@ -89,8 +93,10 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
   const openingCounts = new Map<string, { name: string; count: number }>();
   const yearCounts = new Map<number, number>();
   const ratingCounts = RATING_BUCKETS.map((bucket) => ({ label: bucket.label, count: 0 }));
+  let reviewed = 0;
 
   for (const record of games) {
+    if (record.reviewedAt) reviewed += 1;
     if (record.result === '1-0') results.white += 1;
     else if (record.result === '0-1') results.black += 1;
     else if (record.result === '1/2-1/2') results.draw += 1;
@@ -127,6 +133,8 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
     const asBlack = emptyRecord();
     const overall = emptyRecord();
     const perOpening = new Map<string, OpeningStat & { record: Record3 }>();
+    const whiteAcc: number[] = [];
+    const blackAcc: number[] = [];
 
     for (const record of games) {
       // Substring match so "carlsen" finds "Carlsen, Magnus" as well as a bare username.
@@ -139,6 +147,9 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
 
       tally(side === 'w' ? asWhite : asBlack, result);
       tally(overall, result);
+
+      if (isWhite && typeof record.accuracyWhite === 'number') whiteAcc.push(record.accuracyWhite);
+      if (isBlack && typeof record.accuracyBlack === 'number') blackAcc.push(record.accuracyBlack);
 
       const key = record.eco || record.opening || 'Unknown';
       const opening = perOpening.get(key) ?? {
@@ -156,6 +167,9 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
       .filter((opening) => opening.record.games >= 2)
       .map((opening) => ({ ...opening, record: finalizeScore(opening.record) }));
 
+    const avg = (values: number[]): number | null =>
+      values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : null;
+
     playerStats = {
       name: player!.trim(),
       games: overall.games,
@@ -164,11 +178,14 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
       asBlack: finalizeScore(asBlack),
       bestOpenings: [...ranked].sort((a, b) => b.record.score - a.record.score).slice(0, 5),
       worstOpenings: [...ranked].sort((a, b) => a.record.score - b.record.score).slice(0, 5),
+      accuracy: { overall: avg([...whiteAcc, ...blackAcc]), white: avg(whiteAcc), black: avg(blackAcc) },
+      reviewedGames: whiteAcc.length + blackAcc.length,
     };
   }
 
   return {
     total: games.length,
+    reviewed,
     decisive: results.white + results.black,
     draws: results.draw,
     results,

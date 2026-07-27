@@ -1,0 +1,20 @@
+{
+  "name": "Chess Studio",
+  "short_name": "Chess Studio",
+  "description": "Stockfish-powered chess analysis, opening explorer, game library, repertoire trainer and tactics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07090f",
+  "theme_color": "#07090f",
+  "categories": ["games", "education", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

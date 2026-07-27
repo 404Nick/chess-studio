@@ -48,6 +48,11 @@ export interface GameRecord {
   pgn: string;
   /** Normalised FEN of every position reached (piece placement + turn + castling + ep). */
   positions: string[];
+  /** Epoch ms this game was last reviewed by the engine (absent = never). */
+  reviewedAt?: number;
+  /** Accuracy percentages from the last review, when reviewed. */
+  accuracyWhite?: number;
+  accuracyBlack?: number;
 }
 
 export interface GameFilter {
@@ -291,6 +296,13 @@ export async function addRemoteGames(games: readonly RemoteGame[]): Promise<numb
     tx.onabort = () => reject(tx.error);
   });
   return records.length;
+}
+
+/** Records the accuracy from a completed review onto the stored game. */
+export async function markReviewed(id: string, accuracyWhite: number, accuracyBlack: number): Promise<void> {
+  const existing = await getGame(id);
+  if (!existing) return;
+  await putGame({ ...existing, reviewedAt: Date.now(), accuracyWhite, accuracyBlack });
 }
 
 /** Every stored game (used by the stats dashboard). */
