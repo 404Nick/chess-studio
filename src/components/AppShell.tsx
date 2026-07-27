@@ -15,6 +15,7 @@ const NAV = [
   { href: '/studio', key: 'nav.studio' },
   { href: '/library', key: 'nav.library' },
   { href: '/stats', key: 'nav.stats' },
+  { href: '/repertoire', key: 'nav.repertoire' },
   { href: '/play', key: 'nav.play' },
 ];
 
