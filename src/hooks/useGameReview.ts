@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Line } from '@/types';
+import type { GameTree } from '@/types';
 import { ReviewCancelledError, reviewGame } from '@/lib/analysis/review';
+import { applyReviewedLine, mainlineToLine } from '@/lib/chess/tree';
 import { createReviewEngine } from '@/lib/engine/engineManager';
 import { putReview } from '@/lib/games/gamesDb';
 import { bookPlyCount, findOpening } from '@/lib/openings';
@@ -14,7 +15,7 @@ export interface GameReviewHandle {
   readonly done: number;
   readonly total: number;
   readonly error: string | null;
-  start(line: Line, depth: number): Promise<void>;
+  start(tree: GameTree, depth: number): Promise<void>;
   cancel(): void;
 }
 
@@ -47,7 +48,8 @@ export function useGameReview(): GameReviewHandle {
   }, []);
 
   const start = useCallback(
-    async (line: Line, depth: number) => {
+    async (tree: GameTree, depth: number) => {
+      const line = mainlineToLine(tree);
       if (activeRef.current || line.moves.length === 0) return;
 
       activeRef.current = true;
@@ -78,7 +80,8 @@ export function useGameReview(): GameReviewHandle {
           },
           shouldCancel: () => cancelRef.current,
         });
-        applyReview(result.line, result.review);
+        // Fold the mainline review back into the branching tree.
+        applyReview(applyReviewedLine(tree, result.line.moves), result.review);
         // Persist so re-opening this game restores the review without re-analysing.
         void putReview(result.line, result.review).catch(() => {});
       } catch (err) {

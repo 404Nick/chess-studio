@@ -5,27 +5,37 @@ import type {
   BoardShape,
   GameHeaders,
   GameReview,
-  Line,
+  GameTree,
   MoveAssessment,
   MoveNode,
   RemoteGame,
   ReviewProgress,
 } from '@/types';
 import { START_FEN } from '@/lib/chess/fen';
+import { type MoveInput } from '@/lib/chess/line';
+import { parsePgnToTree } from '@/lib/chess/treePgn';
 import {
-  type MoveInput,
   chessAtCursor,
-  currentFen,
-  deleteFrom,
-  emptyLine,
-  goTo,
-  parsePgn,
-  playMove,
-  updateNode,
-} from '@/lib/chess/line';
+  currentFen as treeFen,
+  currentNode as treeCurrentNode,
+  deleteNode as treeDeleteNode,
+  emptyTree,
+  goToNode,
+  mainline as treeMainline,
+  movesToNode,
+  nodeOf,
+  playMove as treePlay,
+  promoteNode as treePromote,
+  siblingVariation,
+  toEnd,
+  toNext,
+  toPrevious,
+  toStart,
+  updateNode as treeUpdateNode,
+} from '@/lib/chess/tree';
 
 export interface GameState {
-  line: Line;
+  tree: GameTree;
   headers: GameHeaders;
   orientation: 'white' | 'black';
   /** Shapes attached to the starting position (moves carry their own). */
@@ -33,27 +43,33 @@ export interface GameState {
   review: GameReview | null;
   reviewProgress: ReviewProgress;
   source: RemoteGame | null;
-  /** Ply index of the move whose classification badge should animate in. */
-  badgePly: number | null;
+  /** Id of the move whose classification badge should animate in. */
+  badgeId: string | null;
 
   /* actions */
   reset(startFen?: string): void;
-  loadLine(line: Line, headers?: GameHeaders, source?: RemoteGame | null): void;
+  loadTree(tree: GameTree, headers?: GameHeaders, source?: RemoteGame | null): void;
   loadPgn(pgn: string, source?: RemoteGame | null): boolean;
   play(input: MoveInput | string): MoveNode | null;
-  navigate(index: number): void;
+  goTo(nodeId: string | null): void;
   first(): void;
   previous(): void;
   next(): void;
   last(): void;
-  truncateFrom(index: number): void;
+  /** Switch to the previous/next sibling variation at the current node. */
+  prevVariation(): void;
+  nextVariation(): void;
+  /** Make a variation the mainline at its branch point. */
+  promote(nodeId: string): void;
+  /** Delete a move and its whole subtree. */
+  deleteNode(nodeId: string): void;
   flip(): void;
-  setComment(index: number, comment: string): void;
-  setShapes(index: number, shapes: readonly BoardShape[]): void;
-  toggleHighlight(index: number, square: BoardShape): void;
-  clearShapes(index: number): void;
-  setAssessment(index: number, assessment: MoveAssessment): void;
-  applyReview(line: Line, review: GameReview): void;
+  setComment(nodeId: string, comment: string): void;
+  setShapes(nodeId: string | null, shapes: readonly BoardShape[]): void;
+  toggleHighlight(nodeId: string | null, square: BoardShape): void;
+  clearShapes(nodeId: string | null): void;
+  setAssessment(nodeId: string, assessment: MoveAssessment): void;
+  applyReview(tree: GameTree, review: GameReview): void;
   setReviewProgress(progress: ReviewProgress): void;
   clearBadge(): void;
   setHeaders(headers: GameHeaders): void;
@@ -61,83 +77,80 @@ export interface GameState {
 
 const IDLE_PROGRESS: ReviewProgress = { done: 0, total: 0, running: false };
 
-/**
- * Shared empty array. Selectors must return referentially stable values — zustand v5
- * compares with `Object.is`, so returning a fresh `[]` would re-render forever.
- */
+/** Shared empty array — zustand v5 compares selector results with `Object.is`. */
 const NO_SHAPES: readonly BoardShape[] = [];
 
 export const useGame = create<GameState>()((set, get) => ({
-  line: emptyLine(START_FEN),
+  tree: emptyTree(START_FEN),
   headers: {},
   orientation: 'white',
   startShapes: [],
   review: null,
   reviewProgress: IDLE_PROGRESS,
   source: null,
-  badgePly: null,
+  badgeId: null,
 
   reset: (startFen = START_FEN) =>
     set({
-      line: emptyLine(startFen),
+      tree: emptyTree(startFen),
       headers: {},
       startShapes: [],
       review: null,
       reviewProgress: IDLE_PROGRESS,
       source: null,
-      badgePly: null,
+      badgeId: null,
     }),
 
-  loadLine: (line, headers = {}, source = null) =>
+  loadTree: (tree, headers = {}, source = null) =>
     set({
-      line,
+      tree,
       headers,
       source,
       startShapes: [],
       review: null,
       reviewProgress: IDLE_PROGRESS,
-      badgePly: null,
+      badgeId: null,
     }),
 
   loadPgn: (pgn, source = null) => {
-    const parsed = parsePgn(pgn);
-    if (parsed.line.moves.length === 0 && parsed.line.startFen === START_FEN) return false;
-    get().loadLine(parsed.line, parsed.headers, source);
+    const parsed = parsePgnToTree(pgn);
+    if (parsed.tree.rootChildren.length === 0 && parsed.tree.startFen === START_FEN) return false;
+    get().loadTree(parsed.tree, parsed.headers, source);
     return true;
   },
 
   play: (input) => {
-    const result = playMove(get().line, input);
+    const result = treePlay(get().tree, input);
     if (!result) return null;
-    set({ line: result.line, badgePly: null, review: null });
+    set({ tree: result.tree, badgeId: null, review: result.existing ? get().review : null });
     return result.node;
   },
 
-  navigate: (index) => set({ line: goTo(get().line, index), badgePly: null }),
-  first: () => set({ line: goTo(get().line, -1), badgePly: null }),
-  previous: () => set({ line: goTo(get().line, get().line.cursor - 1), badgePly: null }),
-  next: () => set({ line: goTo(get().line, get().line.cursor + 1), badgePly: null }),
-  last: () => set({ line: goTo(get().line, get().line.moves.length - 1), badgePly: null }),
+  goTo: (nodeId) => set({ tree: goToNode(get().tree, nodeId), badgeId: null }),
+  first: () => set({ tree: toStart(get().tree), badgeId: null }),
+  previous: () => set({ tree: toPrevious(get().tree), badgeId: null }),
+  next: () => set({ tree: toNext(get().tree), badgeId: null }),
+  last: () => set({ tree: toEnd(get().tree), badgeId: null }),
+  prevVariation: () => set({ tree: siblingVariation(get().tree, -1), badgeId: null }),
+  nextVariation: () => set({ tree: siblingVariation(get().tree, 1), badgeId: null }),
 
-  truncateFrom: (index) => set({ line: deleteFrom(get().line, index), review: null }),
+  promote: (nodeId) => set({ tree: treePromote(get().tree, nodeId) }),
+  deleteNode: (nodeId) => set({ tree: treeDeleteNode(get().tree, nodeId), review: null }),
 
   flip: () => set({ orientation: get().orientation === 'white' ? 'black' : 'white' }),
 
-  setComment: (index, comment) => {
-    if (index < 0) return;
-    set({ line: updateNode(get().line, index, { comment }) });
-  },
+  setComment: (nodeId, comment) => set({ tree: treeUpdateNode(get().tree, nodeId, { comment }) }),
 
-  setShapes: (index, shapes) => {
-    if (index < 0) {
+  setShapes: (nodeId, shapes) => {
+    if (nodeId === null) {
       set({ startShapes: shapes });
       return;
     }
-    set({ line: updateNode(get().line, index, { shapes }) });
+    set({ tree: treeUpdateNode(get().tree, nodeId, { shapes }) });
   },
 
-  toggleHighlight: (index, shape) => {
-    const existing = shapesAt(get(), index);
+  toggleHighlight: (nodeId, shape) => {
+    const existing = shapesAt(get(), nodeId);
     const match = existing.findIndex(
       (item) => item.kind === shape.kind && item.from === shape.from && item.to === shape.to,
     );
@@ -145,22 +158,20 @@ export const useGame = create<GameState>()((set, get) => ({
       match >= 0
         ? existing.filter((_, i) => i !== match)
         : [...existing.filter((item) => !(item.kind === 'highlight' && item.from === shape.from)), shape];
-    get().setShapes(index, nextShapes);
+    get().setShapes(nodeId, nextShapes);
   },
 
-  clearShapes: (index) => get().setShapes(index, []),
+  clearShapes: (nodeId) => get().setShapes(nodeId, []),
 
-  setAssessment: (index, assessment) => {
-    if (index < 0) return;
-    set({ line: updateNode(get().line, index, { assessment }), badgePly: index });
-  },
+  setAssessment: (nodeId, assessment) =>
+    set({ tree: treeUpdateNode(get().tree, nodeId, { assessment }), badgeId: nodeId }),
 
-  applyReview: (line, review) =>
-    set({ line, review, reviewProgress: IDLE_PROGRESS, badgePly: null }),
+  applyReview: (tree, review) =>
+    set({ tree, review, reviewProgress: IDLE_PROGRESS, badgeId: null }),
 
   setReviewProgress: (progress) => set({ reviewProgress: progress }),
 
-  clearBadge: () => set({ badgePly: null }),
+  clearBadge: () => set({ badgeId: null }),
 
   setHeaders: (headers) => set({ headers: { ...get().headers, ...headers } }),
 }));
@@ -170,31 +181,35 @@ export const useGame = create<GameState>()((set, get) => ({
 /* ------------------------------------------------------------------ */
 
 export function fenOf(state: GameState): string {
-  return currentFen(state.line);
+  return treeFen(state.tree);
 }
 
 export function currentNode(state: GameState): MoveNode | null {
-  return state.line.cursor >= 0 ? state.line.moves[state.line.cursor] : null;
+  return treeCurrentNode(state.tree);
 }
 
-export function shapesAt(state: GameState, index: number): readonly BoardShape[] {
-  if (index < 0) return state.startShapes;
-  return state.line.moves[index]?.shapes ?? NO_SHAPES;
+export function shapesAt(state: GameState, nodeId: string | null): readonly BoardShape[] {
+  if (nodeId === null) return state.startShapes;
+  return nodeOf(state.tree, nodeId)?.shapes ?? NO_SHAPES;
 }
 
 export function currentShapes(state: GameState): readonly BoardShape[] {
-  return shapesAt(state, state.line.cursor);
+  return shapesAt(state, state.tree.cursor);
 }
 
 /**
- * SAN moves up to and including the cursor — what the opening book should match.
- * Not safe to use directly as a zustand selector (it allocates); derive it with
- * `useMemo` from the `line` instead.
+ * SAN moves along the path to the cursor — what the opening book should match.
+ * Allocates, so derive it with `useMemo` from the `tree` rather than as a selector.
  */
-export function sanUpToCursor(line: Line): string[] {
-  return line.moves.slice(0, line.cursor + 1).map((move) => move.san);
+export function sanToCursor(tree: GameTree): string[] {
+  return movesToNode(tree, tree.cursor).map((move) => move.san);
+}
+
+/** The mainline moves, for consumers that need a linear view. */
+export function mainlineMoves(tree: GameTree): MoveNode[] {
+  return treeMainline(tree);
 }
 
 export function isGameOver(state: GameState): boolean {
-  return chessAtCursor(state.line).isGameOver();
+  return chessAtCursor(state.tree).isGameOver();
 }

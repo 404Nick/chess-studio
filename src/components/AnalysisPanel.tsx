@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo } from 'react';
 import type { Color, MoveClass, PositionAnalysis } from '@/types';
 import { MOVE_CLASS_META } from '@/lib/analysis/classify';
+import { applyReviewedLine, mainlineToLine } from '@/lib/chess/tree';
 import type { AnalysisSource } from '@/hooks/useStockfish';
 import { getCachedReview, lineKey } from '@/lib/games/gamesDb';
 import { useGameReview } from '@/hooks/useGameReview';
@@ -30,24 +31,31 @@ export function AnalysisPanel({
   engineUnavailable: boolean;
   source?: AnalysisSource;
 }) {
-  const line = useGame((state) => state.line);
+  const tree = useGame((state) => state.tree);
   const review = useGame((state) => state.review);
-  const navigate = useGame((state) => state.navigate);
+  const goTo = useGame((state) => state.goTo);
   const applyReview = useGame((state) => state.applyReview);
   const node = useGame(currentNode);
 
+  // The mainline as a linear list, for the review, the eval graph and the mistake stepper.
+  const mainLine = useMemo(() => mainlineToLine(tree), [tree]);
+  const mainNodes = mainLine.moves;
+  const cursorIndex = useMemo(
+    () => mainNodes.findIndex((move) => move.id === tree.cursor),
+    [mainNodes, tree.cursor],
+  );
+
   // Restore a previously computed review from IndexedDB when this game is reopened,
   // so we don't re-grind the engine over a game we've already analysed. Keyed by the
-  // line's content hash, which is stable across navigation.
-  const reviewKey = useMemo(() => (line.moves.length ? lineKey(line) : ''), [line]);
+  // mainline's content hash, which is stable across navigation.
+  const reviewKey = useMemo(() => (mainLine.moves.length ? lineKey(mainLine) : ''), [mainLine]);
   useEffect(() => {
     if (review || !reviewKey) return undefined;
     let cancelled = false;
-    getCachedReview(useGame.getState().line)
+    getCachedReview(mainlineToLine(useGame.getState().tree))
       .then((cached) => {
         if (cancelled || !cached) return;
-        // Keep the user where they are in the game.
-        applyReview({ ...cached.line, cursor: useGame.getState().line.cursor }, cached.review);
+        applyReview(applyReviewedLine(useGame.getState().tree, cached.line.moves), cached.review);
       })
       .catch(() => {});
     return () => {
@@ -63,30 +71,34 @@ export function AnalysisPanel({
   const assessmentLabel = useClassLabel(node?.assessment?.classification ?? 'good');
 
   const startReview = useCallback(() => {
-    void gameReview.start(line, reviewDepth);
-  }, [gameReview, line, reviewDepth]);
+    void gameReview.start(useGame.getState().tree, reviewDepth);
+  }, [gameReview, reviewDepth]);
 
-  // Indices of every sub-par move, for the "jump to mistakes" stepper.
+  // Mainline indices of every sub-par move, for the "jump to mistakes" stepper.
   const mistakeIndices = useMemo(() => {
     const flagged = new Set<MoveClass>(['inaccuracy', 'mistake', 'blunder']);
-    return line.moves.reduce<number[]>((acc, move, index) => {
+    return mainNodes.reduce<number[]>((acc, move, index) => {
       if (move.assessment && flagged.has(move.assessment.classification)) acc.push(index);
       return acc;
     }, []);
-  }, [line]);
+  }, [mainNodes]);
+
+  const gotoIndex = useCallback(
+    (index: number) => goTo(index < 0 ? null : (mainNodes[index]?.id ?? null)),
+    [goTo, mainNodes],
+  );
 
   const gotoMistake = useCallback(
     (direction: 1 | -1) => {
       if (mistakeIndices.length === 0) return;
-      const cursor = line.cursor;
       const target =
         direction === 1
-          ? (mistakeIndices.find((index) => index > cursor) ?? mistakeIndices[0])
-          : ([...mistakeIndices].reverse().find((index) => index < cursor) ??
+          ? (mistakeIndices.find((index) => index > cursorIndex) ?? mistakeIndices[0])
+          : ([...mistakeIndices].reverse().find((index) => index < cursorIndex) ??
             mistakeIndices[mistakeIndices.length - 1]);
-      navigate(target);
+      gotoIndex(target);
     },
-    [mistakeIndices, line.cursor, navigate],
+    [mistakeIndices, cursorIndex, gotoIndex],
   );
 
   const assessment = node?.assessment ?? null;
@@ -104,7 +116,7 @@ export function AnalysisPanel({
               {t('common.cancel')}
             </Button>
           ) : (
-            <Button variant="primary" onClick={startReview} disabled={engineUnavailable || line.moves.length === 0}>
+            <Button variant="primary" onClick={startReview} disabled={engineUnavailable || mainNodes.length === 0}>
               {review ? t('analysis.rerun') : t('analysis.review')}
             </Button>
           )
@@ -209,7 +221,7 @@ export function AnalysisPanel({
                 </Button>
               </div>
             </div>
-            <GameReviewSummary review={review} cursor={line.cursor} onSelect={navigate} />
+            <GameReviewSummary review={review} cursor={cursorIndex} onSelect={gotoIndex} />
           </>
         ) : null}
       </div>

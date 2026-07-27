@@ -153,6 +153,33 @@ export interface Line {
   readonly cursor: number;
 }
 
+/* ------------------------------------------------------------------ */
+/* Move tree (branching variations)                                    */
+/* ------------------------------------------------------------------ */
+
+/** One node in the move tree — a played move plus its links. */
+export interface TreeNode {
+  /** The played move. `move.id` is also this node's id. */
+  readonly move: MoveNode;
+  /** Parent node id, or null when this move is played from the start position. */
+  readonly parentId: string | null;
+  /** Child node ids in priority order — `children[0]` is the mainline continuation. */
+  readonly children: readonly string[];
+}
+
+/**
+ * A branching game: any position can have several continuations. The first child of a
+ * node (or of the root) is the mainline; the rest are variations. `cursor` is the id of
+ * the current node, or null at the starting position.
+ */
+export interface GameTree {
+  readonly startFen: string;
+  /** First moves from the start position; `rootChildren[0]` is the mainline. */
+  readonly rootChildren: readonly string[];
+  readonly nodes: Readonly<Record<string, TreeNode>>;
+  readonly cursor: string | null;
+}
+
 export interface GameHeaders {
   event?: string;
   site?: string;

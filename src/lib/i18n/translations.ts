@@ -76,6 +76,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'moves.none': 'No moves yet',
     'moves.noneBody': 'Play a move on the board, paste a PGN, or load a game from a player profile.',
     'moves.commentPlaceholder': 'Add a comment to this move…',
+    'moves.promote': '↑ Promote',
+    'moves.delete': '✕ Delete',
 
     /* analysis panel */
     'analysis.title': 'Engine analysis',
@@ -386,6 +388,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'moves.none': 'Ходов пока нет',
     'moves.noneBody': 'Сделайте ход на доске, вставьте PGN или загрузите партию из профиля игрока.',
     'moves.commentPlaceholder': 'Добавить комментарий к ходу…',
+    'moves.promote': '↑ В основную',
+    'moves.delete': '✕ Удалить',
 
     'analysis.title': 'Анализ движка',
     'analysis.subtitle': 'Stockfish · глубина {depth}',

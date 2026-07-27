@@ -5,20 +5,21 @@ import type { BoardShape, MoveClass, MoveNode, Square } from '@/types';
 import { assessSingleMove } from '@/lib/analysis/review';
 import { playMoveSound, playSound } from '@/lib/sound/sounds';
 import { fenTurn, validateFen } from '@/lib/chess/fen';
-import { currentFen, describeResult, chessAtCursor, parseUci } from '@/lib/chess/line';
+import { describeResult, parseUci } from '@/lib/chess/line';
+import { chessAtCursor, childrenOf } from '@/lib/chess/tree';
 import { bookPlyCount, findOpening } from '@/lib/openings';
 import { getTheme, SHAPE_COLORS } from '@/lib/theme/boardThemes';
 import { useAnalyseOnce, useEngine, useLiveAnalysis } from '@/hooks/useStockfish';
 import { useBoardShortcuts } from '@/hooks/useBoardShortcuts';
 import { useTranslation } from '@/lib/i18n';
-import { currentNode, currentShapes, isGameOver, sanUpToCursor, useGame } from '@/store/gameStore';
-// `sanUpToCursor` is a plain helper (it allocates) and is derived with useMemo below.
+import { currentNode, currentShapes, fenOf, isGameOver, mainlineMoves, sanToCursor, useGame } from '@/store/gameStore';
+// `sanToCursor` is a plain helper (it allocates) and is derived with useMemo below.
 import { useSettings } from '@/store/settingsStore';
 import { AnalysisPanel } from '@/components/AnalysisPanel';
 import { BoardControls, ImportExportBar } from '@/components/BoardControls';
 import { BoardSurface, type BoardMove } from '@/components/Chessboard';
 import { EvalBar } from '@/components/EvalBar';
-import { MoveList } from '@/components/MoveList';
+import { MoveTree } from '@/components/MoveTree';
 import { OpeningBook } from '@/components/OpeningBook';
 import { ProfileFetch } from '@/components/ProfileFetch';
 import { ThemePicker } from '@/components/ThemePicker';
@@ -42,19 +43,24 @@ export default function AnalysisPage() {
     [t],
   );
 
-  const line = useGame((state) => state.line);
+  const tree = useGame((state) => state.tree);
   const headers = useGame((state) => state.headers);
   const orientation = useGame((state) => state.orientation);
   const shapes = useGame(currentShapes);
   const node = useGame(currentNode);
-  const sanMoves = useMemo(() => sanUpToCursor(line), [line]);
+  const sanMoves = useMemo(() => sanToCursor(tree), [tree]);
+  const moveCount = useMemo(() => mainlineMoves(tree).length, [tree]);
 
   const play = useGame((state) => state.play);
-  const navigate = useGame((state) => state.navigate);
+  const goTo = useGame((state) => state.goTo);
   const first = useGame((state) => state.first);
   const previous = useGame((state) => state.previous);
   const next = useGame((state) => state.next);
   const last = useGame((state) => state.last);
+  const prevVariation = useGame((state) => state.prevVariation);
+  const nextVariation = useGame((state) => state.nextVariation);
+  const promote = useGame((state) => state.promote);
+  const deleteNode = useGame((state) => state.deleteNode);
   const flip = useGame((state) => state.flip);
   const reset = useGame((state) => state.reset);
   const loadPgn = useGame((state) => state.loadPgn);
@@ -65,8 +71,9 @@ export default function AnalysisPage() {
   const [tab, setTab] = useState<PanelTab>('analysis');
   const [shapeColor, setShapeColor] = useState(SHAPE_COLORS[0].value);
 
-  const fen = useMemo(() => currentFen(line), [line]);
+  const fen = useGame(fenOf);
   const turn = useMemo(() => fenTurn(fen), [fen]);
+  const canNext = childrenOf(tree, tree.cursor).length > 0;
 
   const engine = useEngine(settings.hashMb);
 
@@ -95,16 +102,13 @@ export default function AnalysisPage() {
     analysisRef.current = analysis;
   }, [analysis]);
 
-  const outcome = useMemo(() => describeResult(chessAtCursor(line)), [line]);
+  const outcome = useMemo(() => describeResult(chessAtCursor(tree)), [tree]);
 
   /* ---------------- playing moves ---------------- */
 
   /** Classifies a freshly played move in the background so the badge can pop in. */
   const classifyLatest = useCallback(
-    async (index: number) => {
-      const played = useGame.getState().line.moves[index];
-      if (!played) return;
-
+    async (played: MoveNode) => {
       const quickDepth = Math.min(settings.engineDepth, 14);
       const cached = analysisRef.current;
 
@@ -115,10 +119,7 @@ export default function AnalysisPage() {
             : await analyseOnce(played.fenBefore, quickDepth, 2);
         const after = await analyseOnce(played.fenAfter, quickDepth, 1);
 
-        const history = useGame
-          .getState()
-          .line.moves.slice(0, index + 1)
-          .map((move) => move.san);
+        const history = sanToCursor(useGame.getState().tree);
         const match = findOpening(history);
 
         const assessment = assessSingleMove({
@@ -129,7 +130,7 @@ export default function AnalysisPage() {
           openingName: match?.entry.name ?? null,
           lang: useSettings.getState().language,
         });
-        setAssessment(index, assessment);
+        setAssessment(played.id, assessment);
 
         // A short "uh-oh" cue a beat after the move lands, once the verdict is in.
         const audio = useSettings.getState();
@@ -152,7 +153,7 @@ export default function AnalysisPage() {
         playMoveSound(played, { volume: s.soundVolume, gameOver: isGameOver(useGame.getState()) });
       }
       if (s.liveAnalysis && engine.ready) {
-        void classifyLatest(useGame.getState().line.cursor);
+        void classifyLatest(played);
       }
     },
     [engine.ready, classifyLatest],
@@ -187,8 +188,8 @@ export default function AnalysisPage() {
   /* ---------------- shapes & navigation ---------------- */
 
   const handleShapes = useCallback(
-    (nextShapes: BoardShape[]) => setShapes(line.cursor, nextShapes),
-    [setShapes, line.cursor],
+    (nextShapes: BoardShape[]) => setShapes(tree.cursor, nextShapes),
+    [setShapes, tree.cursor],
   );
 
   useBoardShortcuts({
@@ -197,6 +198,8 @@ export default function AnalysisPage() {
     onFirst: first,
     onLast: last,
     onFlip: flip,
+    onUp: prevVariation,
+    onDown: nextVariation,
   });
 
   /* ---------------- derived board props ---------------- */
@@ -239,8 +242,8 @@ export default function AnalysisPage() {
               onNext={next}
               onLast={last}
               onFlip={flip}
-              canPrevious={line.cursor >= 0}
-              canNext={line.cursor < line.moves.length - 1}
+              canPrevious={tree.cursor !== null}
+              canNext={canNext}
             />
           </div>
 
@@ -287,7 +290,7 @@ export default function AnalysisPage() {
               ))}
               <button
                 type="button"
-                onClick={() => setShapes(line.cursor, [])}
+                onClick={() => setShapes(tree.cursor, [])}
                 className="ml-1 text-[0.68rem] text-[var(--text-muted)] hover:text-white"
               >
                 {t('common.clear')}
@@ -306,7 +309,7 @@ export default function AnalysisPage() {
 
         <Panel className="p-3">
           <ImportExportBar
-            line={line}
+            tree={tree}
             headers={headers}
             onImportPgn={(pgn) => loadPgn(pgn)}
             onSetFen={(value) => {
@@ -345,12 +348,12 @@ export default function AnalysisPage() {
         <Panel className="flex max-h-[26rem] min-h-[14rem] flex-col overflow-hidden">
           <PanelHeader
             title={t('moves.title')}
-            subtitle={t('moves.count', { n: line.moves.length })}
+            subtitle={t('moves.count', { n: moveCount })}
             actions={
-              line.cursor >= 0 ? (
+              node ? (
                 <button
                   type="button"
-                  onClick={() => useGame.getState().truncateFrom(line.cursor)}
+                  onClick={() => deleteNode(node.id)}
                   className="text-[0.68rem] text-[var(--text-muted)] hover:text-white"
                 >
                   {t('board.deleteFromHere')}
@@ -358,14 +361,20 @@ export default function AnalysisPage() {
               ) : null
             }
           />
-          <MoveList line={line} onSelect={navigate} showBadges={settings.showClassificationBadges} />
-          {line.cursor >= 0 ? (
+          <MoveTree
+            tree={tree}
+            onSelect={goTo}
+            onPromote={promote}
+            onDelete={deleteNode}
+            showBadges={settings.showClassificationBadges}
+          />
+          {node ? (
             <div className="border-t border-white/[0.06] p-2">
               <input
                 className="input text-xs"
                 placeholder={t('moves.commentPlaceholder')}
-                value={node?.comment ?? ''}
-                onChange={(event) => setComment(line.cursor, event.target.value)}
+                value={node.comment ?? ''}
+                onChange={(event) => setComment(node.id, event.target.value)}
               />
             </div>
           ) : null}

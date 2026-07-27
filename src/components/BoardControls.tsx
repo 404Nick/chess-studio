@@ -1,9 +1,10 @@
 'use client';
 
 import { type ReactNode, useCallback, useRef, useState } from 'react';
-import type { GameHeaders, Line } from '@/types';
-import { downloadText, lineToPgn, safeFilename } from '@/lib/chess/pgn';
-import { currentFen } from '@/lib/chess/line';
+import type { GameHeaders, GameTree } from '@/types';
+import { downloadText, safeFilename } from '@/lib/chess/pgn';
+import { currentFen } from '@/lib/chess/tree';
+import { treeToPgn } from '@/lib/chess/treePgn';
 import { addGameFromPgn } from '@/lib/games/gamesDb';
 import { useTranslation } from '@/lib/i18n';
 import { Button } from './ui/Primitives';
@@ -80,14 +81,14 @@ function useCopyFeedback(): [string | null, (key: string, text: string) => void]
 }
 
 export function ImportExportBar({
-  line,
+  tree,
   headers,
   onImportPgn,
   onSetFen,
   filename = 'analysis',
   includeAnalysis = true,
 }: {
-  line: Line;
+  tree: GameTree;
   headers: GameHeaders;
   onImportPgn(pgn: string): void;
   onSetFen(fen: string): void;
@@ -100,16 +101,17 @@ export function ImportExportBar({
   const [copied, copy] = useCopyFeedback();
   const { t } = useTranslation();
 
-  const pgn = () => lineToPgn(line, headers, { includeComments: true, includeAnalysis });
+  const empty = tree.rootChildren.length === 0;
+  const pgn = () => treeToPgn(tree, headers, { includeComments: true, includeAnalysis });
 
   const save = useCallback(async () => {
-    if (line.moves.length === 0) return;
-    await addGameFromPgn(lineToPgn(line, headers, { includeComments: true, includeAnalysis }), {
+    if (empty) return;
+    await addGameFromPgn(treeToPgn(tree, headers, { includeComments: true, includeAnalysis }), {
       origin: 'local',
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1600);
-  }, [line, headers, includeAnalysis]);
+  }, [tree, headers, includeAnalysis, empty]);
 
   const submit = useCallback(() => {
     const value = text.trim();
@@ -124,7 +126,7 @@ export function ImportExportBar({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button onClick={() => copy('fen', currentFen(line))}>
+        <Button onClick={() => copy('fen', currentFen(tree))}>
           {copied === 'fen' ? t('ctrl.copied') : t('ctrl.copyFen')}
         </Button>
         <Button onClick={() => copy('pgn', pgn())}>
@@ -133,7 +135,7 @@ export function ImportExportBar({
         <Button onClick={() => downloadText(`${safeFilename(filename)}.pgn`, pgn())}>
           {t('ctrl.downloadPgn')}
         </Button>
-        <Button onClick={() => void save()} disabled={line.moves.length === 0}>
+        <Button onClick={() => void save()} disabled={empty}>
           {saved ? t('ctrl.saved') : t('ctrl.saveLibrary')}
         </Button>
         <Button variant={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
