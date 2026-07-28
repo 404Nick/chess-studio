@@ -1,10 +1,13 @@
 <h1 align="center">♞ Chess Studio</h1>
 
 <p align="center">
-  A production-ready chess <b>analytics &amp; studio</b> desktop/web app — a Stockfish-powered
-  analysis board with automatic move classification and plain-English explanations, a combined
-  offline&nbsp;+&nbsp;online opening explorer, one-click game import from Lichess and Chess.com,
-  and a full study/PGN studio with a drag-and-drop position editor.
+  A production-ready chess <b>analysis &amp; training suite</b> for desktop/web — a Stockfish-powered
+  analysis board with <b>branching variations</b>, automatic move classification and plain-English
+  explanations, cloud-eval&nbsp;+&nbsp;7-piece tablebase, a combined offline&nbsp;+&nbsp;online opening
+  explorer, one-click import from Lichess and Chess.com, an offline <b>game library</b> with
+  full-text/FEN search, a <b>stats dashboard</b>, an <b>opening repertoire trainer</b> with spaced
+  repetition, a <b>tactics trainer built from your own blunders</b>, <b>play vs. Stockfish</b>, and a
+  full study/PGN studio with a drag-and-drop position editor.
 </p>
 
 <p align="center">
@@ -23,8 +26,22 @@
 <p align="center"><i>Live evaluation, best-move arrows and instant move classification as you play.</i></p>
 
 Built with **Next.js 14 (App Router) · TypeScript · Tailwind CSS · Framer Motion ·
-chess.js · react-chessboard · Stockfish (WebAssembly, in a Web Worker)**, and packaged as a
-native Windows app with **Electron**.
+chess.js · react-chessboard · Stockfish 16 NNUE (WebAssembly, in a Web Worker) · IndexedDB**,
+and packaged as a native Windows app with **Electron**. It is also an **installable PWA**.
+
+---
+
+## Seven workspaces
+
+| | Workspace | What it's for |
+| --- | --- | --- |
+| ♟ | **Analysis** | Live engine, **branching variations** (a real move tree), move classification & explanations, one-click full-game review. |
+| 📚 | **Studio** | Multi-chapter studies with a drag-and-drop position editor and PGN import/export. |
+| 🗄 | **Library** | An offline game database (IndexedDB) with search by player / opening / ECO / date / result / **exact FEN**, and **batch review** of your games. |
+| 📊 | **Stats** | A dashboard scoped to any player — win-rate by colour, opening repertoire, review accuracy and a move-quality breakdown — from your library **or fetched live** from Lichess/Chess.com without saving. |
+| 🎯 | **Repertoire** | Build White/Black opening repertoires and drill them with a **spaced-repetition trainer**. |
+| 🧩 | **Tactics** | A puzzle trainer generated **from your own blunders**. |
+| 🤖 | **Play** | Play a full game against Stockfish at an adjustable strength. |
 
 ---
 
@@ -126,14 +143,21 @@ chess-studio/
 │   └── stockfish/                  # generated at install time (git-ignored)
 └── src/
     ├── app/
-    │   ├── layout.tsx              # root layout + <AppShell>
+    │   ├── layout.tsx              # root layout + <AppShell> + PWA manifest
     │   ├── globals.css             # design system, component classes
-    │   ├── page.tsx                # ANALYSIS BOARD
+    │   ├── page.tsx                # ANALYSIS BOARD (branching variations)
     │   ├── studio/page.tsx         # STUDIO (chapters, editor, PGN)
+    │   ├── library/page.tsx        # LIBRARY (IndexedDB games + search + batch review)
+    │   ├── stats/page.tsx          # STATS dashboard (+ live online fetch)
+    │   ├── repertoire/page.tsx     # REPERTOIRE builder + SRS trainer
+    │   ├── tactics/page.tsx        # TACTICS from your blunders
+    │   ├── play/page.tsx           # PLAY vs. Stockfish
     │   └── api/
     │       ├── profile/route.ts    # Lichess / Chess.com profile proxy
     │       ├── games/route.ts      # recent games proxy
-    │       └── explorer/route.ts   # Lichess Opening Explorer proxy
+    │       ├── explorer/route.ts   # Lichess Opening Explorer proxy
+    │       ├── cloud-eval/route.ts # Lichess cloud-eval proxy
+    │       └── tablebase/route.ts  # Lichess 7-piece tablebase proxy
     ├── components/
     │   ├── AppShell.tsx            # nav, engine status, store hydration
     │   ├── Chessboard.tsx          # BoardSurface: moves, arrows, badges, promotion
@@ -165,16 +189,25 @@ chess-studio/
     │   │   ├── board.ts            # 64-square model, attack maps, SEE, material
     │   │   ├── tactics.ts          # forks, pins, hanging pieces, king safety
     │   │   ├── fen.ts              # parse/build/validate, castling & e.p. helpers
-    │   │   ├── line.ts             # move line, navigation, PGN parsing
-    │   │   └── pgn.ts              # PGN writer (comments, NAGs, %cal/%csl shapes)
+    │   │   ├── line.ts             # linear move line (studio, play)
+    │   │   ├── tree.ts             # branching move tree (analysis board)
+    │   │   ├── pgn.ts              # linear PGN writer
+    │   │   └── treePgn.ts          # variation-aware PGN parse + export
     │   ├── engine/
     │   │   ├── uci.ts              # UCI parsing, win% / accuracy maths
     │   │   ├── StockfishEngine.ts  # worker wrapper with a serialised job queue
-    │   │   └── engineManager.ts    # live + review engine instances
-    │   ├── analysis/
-    │   │   ├── classify.ts         # Brilliant → Blunder classification
-    │   │   ├── explain.ts          # human-readable move explanations
-    │   │   └── review.ts           # full-game review + accuracy scores
+    │   │   ├── cloudEval.ts        # Lichess cloud-eval → PositionAnalysis
+    │   │   ├── tablebase.ts        # Lichess tablebase → PositionAnalysis
+    │   │   └── engineManager.ts    # live / review / opponent engine instances
+    │   ├── analysis/               # classify, explain, review
+    │   ├── games/
+    │   │   ├── gamesDb.ts          # IndexedDB game store + FEN search + review cache
+    │   │   ├── stats.ts            # per-player aggregation
+    │   │   └── tactics.ts          # blunder → puzzle extraction
+    │   ├── repertoire/
+    │   │   ├── repertoireDb.ts     # repertoire + SRS store (own IndexedDB db)
+    │   │   └── trainer.ts          # card collection, due selection, scheduling
+    │   ├── sound/sounds.ts         # Web-Audio move sounds (no asset files)
     │   ├── openings/               # bundled ECO book + lookup
     │   ├── api/                    # Lichess & Chess.com clients + browser wrappers
     │   └── theme/boardThemes.ts
@@ -192,12 +225,20 @@ chess-studio/
 ### 1. Analysis board
 
 * Drag or click to move, with a custom promotion picker.
-* Live Stockfish evaluation with a configurable depth and MultiPV (1–5).
-* Animated evaluation bar that flips with the board.
-* Best-move arrow, last-move highlight, check indicator, legal-move dots.
-* Right-**drag** to draw arrows, right-**click** to highlight squares, in four colours.
-  Annotations are stored per move and exported to PGN as `[%cal]` / `[%csl]`.
-* Keyboard navigation: `←` `→` `Home` `End`, `F` to flip.
+* **Branching variations** — a real move tree. Playing an alternative from an earlier
+  move creates a variation instead of overwriting the line; variations nest, render
+  inline in the move list, and can be **promoted to the mainline or deleted**. Variations
+  round-trip through PGN (`1. e4 e5 (1... c5 2. Nf3) 2. Nf3`).
+* **Hybrid evaluation pipeline**: an ≤7-piece **Syzygy tablebase** lookup and the
+  **Lichess cloud-eval cache** are tried first for instant, deep results, falling back
+  seamlessly to the local engine. A chip shows which source served the position.
+* Configurable depth and MultiPV (1–5); animated evaluation bar that flips with the board.
+* Best-move arrow, last-move highlight, check indicator, legal-move dots. **Sound effects**
+  for moves, captures, checks, blunders and game end (synthesised, no asset files).
+* Right-**drag** to draw arrows, right-**click** to highlight squares, in four colours;
+  redraw a mark to erase it, or **Clear arrows** for a clean board. Annotations are stored
+  per move and exported to PGN as `[%cal]` / `[%csl]`.
+* Keyboard navigation: `←` `→` `Home` `End`, `↑` `↓` to switch variations, `F` to flip.
 
 ### 2. Move classification & explanations
 
@@ -228,13 +269,15 @@ king pressure, producing sentences such as:
 
 ### 3. Full-game review
 
-Runs on a **separate engine instance** so the board stays responsive. Produces per-side
-accuracy (blended arithmetic/harmonic mean, as Lichess does), average centipawn loss, a
-clickable evaluation graph, and a breakdown of every classification.
+One click reviews every position. Produces per-side accuracy (blended arithmetic/harmonic
+mean, as Lichess does), average centipawn loss, a clickable evaluation graph, and a
+breakdown of every classification. A **jump-to-mistakes** stepper walks straight through
+the inaccuracies, mistakes and blunders. Reviews are **cached in IndexedDB**, so reopening
+a game restores its report instantly instead of re-analysing.
 
 ### 4. Opening explorer
 
-* A bundled ECO book (~185 named lines) resolves the opening name instantly and offline.
+* A bundled ECO book (~255 named lines) resolves the opening name instantly and offline.
 * The Lichess Opening Explorer is layered on top for full coverage, White/Draw/Black win
   rates, move popularity and notable games. Switch between the **Lichess players** and
   **Masters** databases.
@@ -275,6 +318,55 @@ The entire interface is **bilingual — English and Russian (Русский)** �
 and the move-classification names (Бриллиантовый, Замечательный, Лучший, …). The choice is
 remembered per browser.
 
+### 8. Game library (offline, IndexedDB)
+
+* Store **thousands of games locally** in the browser via a dependency-free IndexedDB
+  layer — no server, fully offline.
+* **Rich search**: by player, opening name, ECO prefix, date range, result, source, and an
+  **exact-FEN "which of my games reached this position?"** lookup (backed by a multiEntry
+  position index). Save games from a player profile (one or all) or by importing PGN files.
+* **Batch review**: one click reviews every un-reviewed game on the shared engine, caching
+  each report and stamping the game with its accuracy — which then feeds the stats
+  dashboard and the tactics trainer.
+
+### 9. Stats dashboard
+
+* A dashboard that **scopes to a single player**: games, decisive/draw split, score and
+  win-rate **by colour**, most-played and best/worst-scoring openings, opposition strength,
+  games per year, and — for reviewed games — **review accuracy and a full move-quality
+  breakdown** (how many Brilliants, Bests, Mistakes, Blunders…).
+* Works on your **library**, or **fetches a player's games live** from Lichess/Chess.com and
+  computes everything in memory — **without importing anything**.
+
+### 10. Repertoire trainer (spaced repetition)
+
+* Build **White and Black opening repertoires** as branching trees (play moves or import
+  PGN; each opponent reply you prepare becomes a variation). Stored in their own IndexedDB
+  database.
+* A **spaced-repetition trainer** plays the opponent's moves and quizzes you on your reply.
+  A wrong move is flagged and the correct one shown; each position is scheduled with a
+  Leitner box system, and the trainer steers opponent moves toward positions that are due.
+  Per-session correct/missed/accuracy and per-repertoire due counts are tracked.
+
+### 11. Tactics trainer — from your own blunders
+
+Mines every stored game review for mistakes and blunders that have a known best move and
+turns each into a "find the engine's move" puzzle. Wrong tries prompt a retry, **Reveal**
+shows the answer with an arrow, **Hint** highlights the piece, and it tracks
+solved / revealed / streak. The more games you review, the richer this gets.
+
+### 12. Play vs. Stockfish
+
+Play a full game against the engine at an adjustable **strength** (Skill Level), as White,
+Black or a random side. Resign, or send the finished game straight to the analysis board.
+
+### 13. Installable PWA
+
+A web-app manifest and icon make Chess Studio **installable** (its own window, offline the
+usual browser way). *(A caching service worker is intentionally omitted — a controlling
+service worker breaks the threaded engine's `SharedArrayBuffer` cross-origin isolation, and
+the engine comes first.)*
+
 ---
 
 ## Engine notes
@@ -292,6 +384,10 @@ remembered per browser.
   engine, so the board never lags behind the cursor; stale results are discarded by token.
 * The transposition table is intentionally **not** cleared between positions in a review —
   that alone makes a full-game pass several times faster.
+* **Cloud eval & tablebase first.** For live analysis the app queries the Lichess
+  cloud-eval cache (and, for ≤7-piece endgames, the Syzygy tablebase) before spinning up a
+  local search — instant, very deep results when available, with a transparent fallback to
+  the local engine. Cloud/tablebase scores are normalised to the app's white-POV convention.
 
 ### Swapping in a different Stockfish build
 
@@ -316,6 +412,8 @@ If `public/stockfish/` is missing or empty, the app does not crash: the header s
 | --- | --- | --- |
 | Lichess API | Profiles, recent games | <https://lichess.org/api> |
 | Lichess Opening Explorer | Opening statistics | <https://explorer.lichess.ovh> |
+| Lichess Cloud Eval | Instant deep evaluations | <https://lichess.org/api#tag/Analysis> |
+| Lichess Tablebase | 7-piece endgame results | <https://tablebase.lichess.ovh> |
 | Chess.com Published-Data API | Profiles, stats, monthly archives | <https://www.chess.com/news/view/published-data-api> |
 
 All three are public and unauthenticated. Please respect their rate limits.

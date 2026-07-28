@@ -114,6 +114,27 @@ const clickByText = (win, text, nth = 0) =>
     )});if(b[${nth}]){b[${nth}].click();return true}return false})()`,
   );
 
+// Clicks the first button whose text contains a substring (case-insensitive).
+const clickContains = (win, text) =>
+  js(
+    win,
+    `(()=>{const re=new RegExp(${JSON.stringify(text)},'i');const b=[...document.querySelectorAll('button')].find(x=>re.test(x.textContent));if(b){b.click();return true}return false})()`,
+  );
+
+// Sets a React-controlled input/textarea value (native setter + input event).
+const setField = (win, selector, value) =>
+  js(
+    win,
+    `(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return false;const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement:HTMLInputElement;Object.getOwnPropertyDescriptor(proto.prototype,'value').set.call(el,${JSON.stringify(
+      value,
+    )});el.dispatchEvent(new Event('input',{bubbles:true}));return true})()`,
+  );
+
+async function loadScene(win, urlPath, settle = 1800) {
+  await win.loadURL(`${BASE}${urlPath}`);
+  await wait(settle);
+}
+
 // Plays the engine's top candidate move by clicking the first score button.
 const playTopCandidate = (win) =>
   js(
@@ -188,6 +209,87 @@ app.whenReady().then(async () => {
     await clickByText(win, 'Opening');
     await wait(2500);
     await snap(win, 'opening.png');
+
+    // --- Branching variations: load a PGN with a variation, show the move tree ---
+    try {
+      await win.loadURL(BASE);
+      await boardReady(win);
+      await wait(1400);
+      await clickContains(win, 'Import');
+      await wait(500);
+      await setField(
+        win,
+        'textarea[placeholder*="Paste a PGN"]',
+        '[Event "Ruy Lopez"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 (3... Nf6 4. O-O Nxe4 5. d4 Nd6) 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6',
+      );
+      await wait(400);
+      await clickByText(win, 'Load');
+      await wait(2000);
+      await snap(win, 'variations.png');
+      log('variations done');
+    } catch (e) {
+      log(`variations FAIL ${e}`);
+    }
+
+    // --- Stats dashboard: fetch a player's games online (nothing saved) ---
+    try {
+      await loadScene(win, '/stats', 1800);
+      await setField(win, 'input[placeholder*="Focus"]', 'DrNykterstein');
+      await wait(400);
+      await clickByText(win, 'Lichess');
+      await wait(7500);
+      await snap(win, 'stats.png');
+      log('stats done');
+    } catch (e) {
+      log(`stats FAIL ${e}`);
+    }
+
+    // --- Repertoire builder ---
+    try {
+      await loadScene(win, '/repertoire', 1600);
+      await setField(win, 'input[placeholder*="Repertoire"]', 'Italian (White)');
+      await wait(400);
+      await clickByText(win, 'Create');
+      await wait(2600);
+      await clickContains(win, 'Import lines');
+      await wait(500);
+      await setField(win, 'textarea', '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 (3... Nf6 4. d3) 4. c3 Nf6 5. d3 d6 6. O-O');
+      await wait(400);
+      await clickContains(win, 'Load lines');
+      await wait(1800);
+      await snap(win, 'repertoire.png');
+      log('repertoire done');
+    } catch (e) {
+      log(`repertoire FAIL ${e}`);
+    }
+
+    // --- Play vs Stockfish ---
+    try {
+      await loadScene(win, '/play', 2600);
+      await clickContains(win, 'Start game');
+      await wait(2200);
+      await snap(win, 'play.png');
+      log('play done');
+    } catch (e) {
+      log(`play FAIL ${e}`);
+    }
+
+    // --- Game library ---
+    try {
+      await loadScene(win, '/library', 1600);
+      await setField(
+        win,
+        'textarea[placeholder*="Paste one or more"]',
+        '[Event "Tata Steel"]\n[White "Carlsen, Magnus"]\n[Black "Nakamura, Hikaru"]\n[Result "1-0"]\n[ECO "C65"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 Nf6 4. O-O Nxe4 5. d4 Nd6 6. Bxc6 dxc6 7. dxe5 Nf5 8. Qxd8+ Kxd8 1-0\n\n[Event "Tata Steel"]\n[White "Nakamura, Hikaru"]\n[Black "Caruana, Fabiano"]\n[Result "1/2-1/2"]\n[ECO "D37"]\n\n1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Be7 5. Bf4 O-O 1/2-1/2',
+      );
+      await wait(400);
+      await clickContains(win, 'Add to library');
+      await wait(1800);
+      await snap(win, 'library.png');
+      log('library done');
+    } catch (e) {
+      log(`library FAIL ${e}`);
+    }
 
     log('all scenes done');
   } catch (err) {

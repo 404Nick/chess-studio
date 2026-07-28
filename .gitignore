@@ -30,3 +30,6 @@ next-env.d.ts
 
 # Local Claude Code harness state
 .claude/
+
+# capture logs
+assets/*.log
