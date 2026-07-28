@@ -69,9 +69,9 @@ export function useBatchReview(): BatchReviewHandle {
           if (line.moves.length > 0) {
             // Reuse a cached review when one already exists, else compute it.
             const cached = await getCachedReview(line);
-            let accuracy = cached?.review.accuracy ?? null;
+            let review = cached?.review ?? null;
 
-            if (!cached) {
+            if (!review) {
               const sanMoves = line.moves.map((move) => move.san);
               const match = findOpening(sanMoves);
               const result = await reviewGame(engine, line, {
@@ -83,10 +83,10 @@ export function useBatchReview(): BatchReviewHandle {
                 shouldCancel: () => cancelRef.current,
               });
               await putReview(result.line, result.review);
-              accuracy = result.review.accuracy;
+              review = result.review;
             }
 
-            if (accuracy) await markReviewed(record.id, accuracy.white, accuracy.black);
+            if (review) await markReviewed(record.id, review);
           }
 
           setDone(i + 1);

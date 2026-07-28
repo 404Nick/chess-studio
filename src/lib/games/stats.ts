@@ -1,4 +1,18 @@
+import type { ClassCounts } from '@/types';
+import { CLASS_ORDER } from '@/lib/analysis/classify';
 import type { GameRecord } from './gamesDb';
+
+function emptyCounts(): ClassCounts {
+  return CLASS_ORDER.reduce((acc, key) => {
+    acc[key] = 0;
+    return acc;
+  }, {} as ClassCounts);
+}
+
+function addCounts(into: ClassCounts, from: ClassCounts | undefined): void {
+  if (!from) return;
+  for (const key of CLASS_ORDER) into[key] += from[key] ?? 0;
+}
 
 /** Win/draw/loss tally with a derived score percentage. */
 export interface Record3 {
@@ -29,6 +43,8 @@ export interface PlayerStats {
   /** Average review accuracy (from batch/analysis reviews), null when none reviewed. */
   accuracy: { overall: number | null; white: number | null; black: number | null };
   reviewedGames: number;
+  /** The player's own move-class counts (brilliant … blunder), summed across reviews. */
+  classCounts: ClassCounts;
 }
 
 export interface LibraryStats {
@@ -89,13 +105,19 @@ const RATING_BUCKETS: { label: string; min: number; max: number }[] = [
  * that treat that player best and worst.
  */
 export function computeStats(games: readonly GameRecord[], player?: string): LibraryStats {
+  const needle = player?.trim().toLowerCase();
+  // When a player is focused, the whole dashboard reflects only their games.
+  const scoped = needle
+    ? games.filter((record) => record.whiteLower.includes(needle) || record.blackLower.includes(needle))
+    : games;
+
   const results = { white: 0, black: 0, draw: 0 };
   const openingCounts = new Map<string, { name: string; count: number }>();
   const yearCounts = new Map<number, number>();
   const ratingCounts = RATING_BUCKETS.map((bucket) => ({ label: bucket.label, count: 0 }));
   let reviewed = 0;
 
-  for (const record of games) {
+  for (const record of scoped) {
     if (record.reviewedAt) reviewed += 1;
     if (record.result === '1-0') results.white += 1;
     else if (record.result === '0-1') results.black += 1;
@@ -127,7 +149,6 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
   const perYear = [...yearCounts.entries()].map(([year, count]) => ({ year, count })).sort((a, b) => a.year - b.year);
 
   let playerStats: PlayerStats | null = null;
-  const needle = player?.trim().toLowerCase();
   if (needle) {
     const asWhite = emptyRecord();
     const asBlack = emptyRecord();
@@ -135,8 +156,9 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
     const perOpening = new Map<string, OpeningStat & { record: Record3 }>();
     const whiteAcc: number[] = [];
     const blackAcc: number[] = [];
+    const classCounts = emptyCounts();
 
-    for (const record of games) {
+    for (const record of scoped) {
       // Substring match so "carlsen" finds "Carlsen, Magnus" as well as a bare username.
       const isWhite = record.whiteLower.includes(needle);
       const isBlack = record.blackLower.includes(needle);
@@ -148,8 +170,14 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
       tally(side === 'w' ? asWhite : asBlack, result);
       tally(overall, result);
 
-      if (isWhite && typeof record.accuracyWhite === 'number') whiteAcc.push(record.accuracyWhite);
-      if (isBlack && typeof record.accuracyBlack === 'number') blackAcc.push(record.accuracyBlack);
+      if (isWhite) {
+        if (typeof record.accuracyWhite === 'number') whiteAcc.push(record.accuracyWhite);
+        addCounts(classCounts, record.countsWhite);
+      }
+      if (isBlack) {
+        if (typeof record.accuracyBlack === 'number') blackAcc.push(record.accuracyBlack);
+        addCounts(classCounts, record.countsBlack);
+      }
 
       const key = record.eco || record.opening || 'Unknown';
       const opening = perOpening.get(key) ?? {
@@ -180,11 +208,12 @@ export function computeStats(games: readonly GameRecord[], player?: string): Lib
       worstOpenings: [...ranked].sort((a, b) => a.record.score - b.record.score).slice(0, 5),
       accuracy: { overall: avg([...whiteAcc, ...blackAcc]), white: avg(whiteAcc), black: avg(blackAcc) },
       reviewedGames: whiteAcc.length + blackAcc.length,
+      classCounts,
     };
   }
 
   return {
-    total: games.length,
+    total: scoped.length,
     reviewed,
     decisive: results.white + results.black,
     draws: results.draw,

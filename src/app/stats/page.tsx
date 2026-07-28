@@ -1,11 +1,49 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClassCounts, MoveClass, Platform } from '@/types';
 import type { GameRecord } from '@/lib/games/gamesDb';
-import { getAllGames } from '@/lib/games/gamesDb';
+import { getAllGames, recordFromRemote } from '@/lib/games/gamesDb';
 import { type OpeningStat, type Record3, computeStats } from '@/lib/games/stats';
+import { CLASS_ORDER, MOVE_CLASS_META } from '@/lib/analysis/classify';
+import { getGames } from '@/lib/api/client';
+import { extractUsername, isValidUsername } from '@/lib/api/shared';
 import { useTranslation } from '@/lib/i18n';
-import { EmptyState, Panel, PanelHeader, Spinner } from '@/components/ui/Primitives';
+import { MoveQualityBadge } from '@/components/MoveQualityBadge';
+import { Button, EmptyState, ErrorNote, Panel, PanelHeader, Spinner } from '@/components/ui/Primitives';
+
+const BREAKDOWN_ORDER: readonly MoveClass[] = CLASS_ORDER.filter((id) => id !== 'forced' && id !== 'book');
+
+function ClassBreakdown({ counts }: { counts: ClassCounts }) {
+  const { t } = useTranslation();
+  const total = BREAKDOWN_ORDER.reduce((sum, id) => sum + (counts[id] ?? 0), 0);
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {BREAKDOWN_ORDER.map((id) => {
+        const meta = MOVE_CLASS_META[id];
+        const n = counts[id] ?? 0;
+        return (
+          <div
+            key={id}
+            className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2"
+            style={{ opacity: n ? 1 : 0.5 }}
+          >
+            <MoveQualityBadge classification={id} size={18} />
+            <span className="min-w-0 flex-1 truncate text-[0.68rem] text-[var(--text-secondary)]">
+              {t(`class.${id}`)}
+            </span>
+            <span className="font-mono text-sm font-bold tabular-nums" style={{ color: meta.color }}>
+              {n}
+            </span>
+          </div>
+        );
+      })}
+      <div className="col-span-2 flex items-center justify-end px-1 text-[0.66rem] text-[var(--text-muted)] sm:col-span-4">
+        {t('stats.classifiedMoves', { n: total })}
+      </div>
+    </div>
+  );
+}
 
 const WIN = '#7fce6b';
 const DRAW = '#9aa3b2';
@@ -109,6 +147,12 @@ export default function StatsPage() {
   const [games, setGames] = useState<GameRecord[] | null>(null);
   const [player, setPlayer] = useState('');
 
+  // Online mode: a fetched player's games, computed in memory without importing them.
+  const [online, setOnline] = useState<{ username: string; platform: Platform; records: GameRecord[] } | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     getAllGames()
@@ -123,11 +167,51 @@ export default function StatsPage() {
     };
   }, []);
 
-  const stats = useMemo(() => (games ? computeStats(games, player || undefined) : null), [games, player]);
+  const activeGames = online ? online.records : games;
+  const activePlayer = online ? online.username : player;
+
+  const stats = useMemo(
+    () => (activeGames ? computeStats(activeGames, activePlayer || undefined) : null),
+    [activeGames, activePlayer],
+  );
 
   const applyPlayer = useCallback((value: string) => setPlayer(value), []);
 
-  if (!games) {
+  const fetchOnline = useCallback(
+    async (platform: Platform) => {
+      const { username } = extractUsername(player);
+      if (!isValidUsername(username)) {
+        setFetchError(t('players.badUsername'));
+        return;
+      }
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      setFetching(true);
+      setFetchError(null);
+      try {
+        const remote = await getGames(platform, username, 100, controller.signal);
+        const records = remote
+          .map((game) => recordFromRemote(game))
+          .filter((record): record is GameRecord => record !== null);
+        setOnline({ username, platform, records });
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          setFetchError(err instanceof Error ? err.message : t('library.dbError'));
+        }
+      } finally {
+        setFetching(false);
+      }
+    },
+    [player, t],
+  );
+
+  const clearOnline = useCallback(() => {
+    setOnline(null);
+    setFetchError(null);
+  }, []);
+
+  if (!games || !stats) {
     return (
       <Panel className="flex min-h-[60vh] items-center justify-center">
         <Spinner />
@@ -135,42 +219,74 @@ export default function StatsPage() {
     );
   }
 
-  if (games.length === 0 || !stats) {
+  const maxOpening = Math.max(1, ...stats.topOpenings.map((o) => o.count));
+  const pct = (part: number) => (stats.total > 0 ? Math.round((part / stats.total) * 100) : 0);
+
+  const header = (
+    <Panel className="p-3">
+      <PanelHeader
+        title={t('stats.title')}
+        subtitle={
+          online
+            ? t('stats.onlineSubtitle', { name: online.username, n: stats.total })
+            : t('stats.subtitle', { n: stats.total })
+        }
+        actions={online ? <Button onClick={clearOnline}>{t('stats.backToLibrary')}</Button> : null}
+      />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          className="input max-w-xs text-sm"
+          placeholder={t('stats.playerPlaceholder')}
+          value={player}
+          onChange={(event) => applyPlayer(event.target.value)}
+          spellCheck={false}
+        />
+        <span className="text-[0.68rem] text-[var(--text-muted)]">{t('stats.orFetch')}</span>
+        <Button onClick={() => void fetchOnline('lichess')} disabled={fetching || !player.trim()}>
+          {fetching ? <Spinner /> : t('players.lichess')}
+        </Button>
+        <Button onClick={() => void fetchOnline('chesscom')} disabled={fetching || !player.trim()}>
+          {fetching ? <Spinner /> : t('players.chesscom')}
+        </Button>
+      </div>
+      <p className="mt-1.5 text-[0.68rem] text-[var(--text-muted)]">{t('stats.playerHint')}</p>
+      {fetchError ? (
+        <div className="mt-2">
+          <ErrorNote>{fetchError}</ErrorNote>
+        </div>
+      ) : null}
+    </Panel>
+  );
+
+  if (stats.total === 0) {
     return (
-      <Panel className="min-h-[60vh]">
-        <EmptyState title={t('stats.emptyTitle')} body={t('stats.emptyBody')} icon="📊" />
-      </Panel>
+      <div className="space-y-4">
+        {header}
+        <Panel>
+          <EmptyState
+            title={online ? t('players.noGames') : t('stats.emptyTitle')}
+            body={online ? '' : t('stats.emptyBody')}
+            icon="📊"
+          />
+        </Panel>
+      </div>
     );
   }
 
-  const maxOpening = Math.max(1, ...stats.topOpenings.map((o) => o.count));
-
   return (
     <div className="space-y-4">
-      <Panel className="p-3">
-        <PanelHeader title={t('stats.title')} subtitle={t('stats.subtitle', { n: stats.total })} />
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <input
-            className="input max-w-xs text-sm"
-            placeholder={t('stats.playerPlaceholder')}
-            value={player}
-            onChange={(event) => applyPlayer(event.target.value)}
-            spellCheck={false}
-          />
-          <p className="text-[0.68rem] text-[var(--text-muted)]">{t('stats.playerHint')}</p>
-        </div>
-      </Panel>
+      {header}
 
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         <Tile label={t('stats.total')} value={String(stats.total)} />
         <Tile
           label={t('stats.decisive')}
-          value={`${Math.round((stats.decisive / stats.total) * 100)}%`}
+          value={`${pct(stats.decisive)}%`}
           sub={t('stats.gamesN', { n: stats.decisive })}
         />
         <Tile
           label={t('stats.draws')}
-          value={`${Math.round((stats.draws / stats.total) * 100)}%`}
+          value={`${pct(stats.draws)}%`}
           sub={t('stats.gamesN', { n: stats.draws })}
         />
         <Tile label={t('stats.whiteWins')} value={String(stats.results.white)} />
@@ -214,6 +330,13 @@ export default function StatsPage() {
               ) : (
                 <p className="mt-2 text-[0.66rem] text-[var(--text-muted)]">{t('stats.notReviewed')}</p>
               )}
+
+              {stats.player.reviewedGames > 0 ? (
+                <div className="mt-3">
+                  <p className="stat-label mb-2">{t('stats.moveQuality')}</p>
+                  <ClassBreakdown counts={stats.player.classCounts} />
+                </div>
+              ) : null}
             </>
           )}
         </Panel>

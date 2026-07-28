@@ -271,18 +271,17 @@ export function BoardSurface({
     return out;
   }, [shapes, arrowPreview, shapeColor, bestMove]);
 
+  // Drawing over an existing mark always removes it, regardless of the selected colour
+  // (classic Lichess behaviour) — so a mark is never impossible to erase.
   const toggleHighlight = useCallback(
     (square: Square) => {
       if (!onShapesChange) return;
       const existing = shapes.find((shape) => shape.kind === 'highlight' && shape.from === square);
-      if (existing && existing.color === shapeColor) {
+      if (existing) {
         onShapesChange(shapes.filter((shape) => shape !== existing));
         return;
       }
-      const withoutSquare = shapes.filter(
-        (shape) => !(shape.kind === 'highlight' && shape.from === square),
-      );
-      onShapesChange([...withoutSquare, { from: square, to: square, color: shapeColor, kind: 'highlight' }]);
+      onShapesChange([...shapes, { from: square, to: square, color: shapeColor, kind: 'highlight' }]);
     },
     [onShapesChange, shapes, shapeColor],
   );
@@ -293,14 +292,11 @@ export function BoardSurface({
       const existing = shapes.find(
         (shape) => shape.kind === 'arrow' && shape.from === from && shape.to === to,
       );
-      if (existing && existing.color === shapeColor) {
+      if (existing) {
         onShapesChange(shapes.filter((shape) => shape !== existing));
         return;
       }
-      const withoutSame = shapes.filter(
-        (shape) => !(shape.kind === 'arrow' && shape.from === from && shape.to === to),
-      );
-      onShapesChange([...withoutSame, { from, to, color: shapeColor, kind: 'arrow' }]);
+      onShapesChange([...shapes, { from, to, color: shapeColor, kind: 'arrow' }]);
     },
     [onShapesChange, shapes, shapeColor],
   );
@@ -434,7 +430,14 @@ export function BoardSurface({
     <div
       ref={wrapperRef}
       className={className}
-      style={{ position: 'relative', width: '100%' }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        // Keep the (square) board within the viewport height so it never overflows the
+        // screen on short/wide layouts; it centres in whatever space is left.
+        maxWidth: 'min(100%, calc(100dvh - 12rem))',
+        marginInline: 'auto',
+      }}
       onDragOver={handleDragOver}
       onDragLeave={() => setDragOverSquare(null)}
       onDrop={handleDrop}

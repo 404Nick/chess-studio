@@ -1,6 +1,6 @@
 'use client';
 
-import type { GameHeaders, GameReview, Line, Platform, RemoteGame } from '@/types';
+import type { ClassCounts, GameHeaders, GameReview, Line, Platform, RemoteGame } from '@/types';
 import { parsePgn } from '@/lib/chess/line';
 import { findOpening } from '@/lib/openings';
 
@@ -53,6 +53,9 @@ export interface GameRecord {
   /** Accuracy percentages from the last review, when reviewed. */
   accuracyWhite?: number;
   accuracyBlack?: number;
+  /** Per-move-class counts from the last review, per colour. */
+  countsWhite?: ClassCounts;
+  countsBlack?: ClassCounts;
 }
 
 export interface GameFilter {
@@ -298,11 +301,18 @@ export async function addRemoteGames(games: readonly RemoteGame[]): Promise<numb
   return records.length;
 }
 
-/** Records the accuracy from a completed review onto the stored game. */
-export async function markReviewed(id: string, accuracyWhite: number, accuracyBlack: number): Promise<void> {
+/** Records the accuracy and move-class counts from a completed review onto the game. */
+export async function markReviewed(id: string, review: GameReview): Promise<void> {
   const existing = await getGame(id);
   if (!existing) return;
-  await putGame({ ...existing, reviewedAt: Date.now(), accuracyWhite, accuracyBlack });
+  await putGame({
+    ...existing,
+    reviewedAt: Date.now(),
+    accuracyWhite: review.accuracy.white,
+    accuracyBlack: review.accuracy.black,
+    countsWhite: review.counts.w,
+    countsBlack: review.counts.b,
+  });
 }
 
 /** Every stored game (used by the stats dashboard). */
