@@ -47,6 +47,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'board.blackToMove': 'Black to move',
     'board.newGame': 'New game',
     'board.draw': 'Draw',
+    'board.clearArrows': 'Clear arrows',
     'board.deleteFromHere': 'Delete from here',
 
     /* result reasons */
@@ -430,6 +431,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     'board.blackToMove': 'Ход чёрных',
     'board.newGame': 'Новая партия',
     'board.draw': 'Рисовать',
+    'board.clearArrows': 'Убрать стрелки',
     'board.deleteFromHere': 'Удалить отсюда',
 
     'result.whiteMate': 'Белые выигрывают матом',

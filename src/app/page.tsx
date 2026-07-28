@@ -206,8 +206,15 @@ export default function AnalysisPage() {
 
   const lastMove = node ? { from: node.from as Square, to: node.to as Square } : null;
 
+  // "Clear" hides the engine's best-move arrow too, so the board goes fully clean;
+  // it comes back on the next move or navigation (i.e. whenever the position changes).
+  const [hideEngineArrow, setHideEngineArrow] = useState(false);
+  useEffect(() => setHideEngineArrow(false), [fen]);
+
   const bestMove =
-    settings.showBestMoveArrow && !outcome.over ? (analysis.lines[0]?.pv[0] ?? null) : null;
+    settings.showBestMoveArrow && !outcome.over && !hideEngineArrow
+      ? (analysis.lines[0]?.pv[0] ?? null)
+      : null;
 
   const badge: { square: Square; classification: MoveClass } | null =
     settings.showClassificationBadges && node?.assessment
@@ -290,10 +297,13 @@ export default function AnalysisPage() {
               ))}
               <button
                 type="button"
-                onClick={() => setShapes(tree.cursor, [])}
+                onClick={() => {
+                  setShapes(tree.cursor, []);
+                  setHideEngineArrow(true);
+                }}
                 className="ml-1 text-[0.68rem] text-[var(--text-muted)] hover:text-white"
               >
-                {t('common.clear')}
+                {t('board.clearArrows')}
               </button>
             </div>
 

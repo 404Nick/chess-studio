@@ -63,9 +63,12 @@ export default function StudioPage() {
   const [importText, setImportText] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // "Clear arrows" hides the engine's best-move arrow too until the position changes.
+  const [hideEngineArrow, setHideEngineArrow] = useState(false);
 
   const line = chapter.line;
   const fen = useMemo(() => currentFen(line), [line]);
+  useEffect(() => setHideEngineArrow(false), [fen]);
   const turn = useMemo(() => fenTurn(fen), [fen]);
   const node = line.cursor >= 0 ? line.moves[line.cursor] : null;
   const outcome = useMemo(() => describeResult(chessAtCursor(line)), [line]);
@@ -288,7 +291,9 @@ export default function StudioPage() {
                   shapes={shapes}
                   onShapesChange={handleShapes}
                   shapeColor={shapeColor}
-                  bestMove={settings.showBestMoveArrow ? (analysis.lines[0]?.pv[0] ?? null) : null}
+                  bestMove={
+                    settings.showBestMoveArrow && !hideEngineArrow ? (analysis.lines[0]?.pv[0] ?? null) : null
+                  }
                   showCoordinates={settings.showCoordinates}
                   showLegalMoves={settings.showLegalMoves}
                   animationMs={settings.animationMs}
@@ -314,10 +319,13 @@ export default function StudioPage() {
                 ))}
                 <button
                   type="button"
-                  onClick={() => setShapes(line.cursor, [])}
+                  onClick={() => {
+                    setShapes(line.cursor, []);
+                    setHideEngineArrow(true);
+                  }}
                   className="ml-1 text-[0.68rem] text-[var(--text-muted)] hover:text-white"
                 >
-                  {t('common.clear')}
+                  {t('board.clearArrows')}
                 </button>
               </div>
 
